@@ -463,11 +463,72 @@ Now reply briefly and naturally in {target_language if target_language else 'Eng
     llm_with_tools = get_llm_with_tools()
     response = await llm_with_tools.ainvoke(messages)
     
+    # FIRST: Check for unsupported languages in tool calls BEFORE processing response content
+    # This prevents returning content about unsupported languages
+    unsupported_language_detected = False
+    if hasattr(response, 'tool_calls') and response.tool_calls:
+        for tool_call in response.tool_calls:
+            # Handle different tool_call formats
+            if isinstance(tool_call, dict):
+                tool_name = tool_call.get("name")
+                tool_args = tool_call.get("args", {})
+            else:
+                tool_name = getattr(tool_call, "name", None)
+                tool_args = getattr(tool_call, "args", {})
+            
+            # Check if this is an upsert_profile call with an unsupported language
+            if tool_name == "upsert_profile":
+                patch = tool_args.get("patch", {})
+                if "target_language" in patch:
+                    target_lang = patch["target_language"]
+                    normalized_lang = normalize_language(target_lang)
+                    if not normalized_lang:
+                        # Language is NOT supported - mark it immediately
+                        print(f"[Agent] ⚠️ Unsupported language detected in initial response: {target_lang}")
+                        unsupported_language_detected = True
+                        break
+    
+    # If unsupported language detected, immediately force a response without processing the initial content
+    if unsupported_language_detected:
+        print(f"[Agent] ⚠️ Unsupported language detected, discarding initial response and forcing error message")
+        supported_langs_str = ", ".join(SUPPORTED_LANGUAGES_LIST)
+        # Add error message to conversation and get new response
+        from langchain_core.messages import ToolMessage
+        import uuid
+        
+        # Add the initial response to messages (for context)
+        messages.append(response)
+        
+        # Add error message for each tool call that tried to use unsupported language
+        for tool_call in response.tool_calls:
+            if isinstance(tool_call, dict):
+                tool_call_id = tool_call.get("id") or tool_call.get("tool_call_id")
+            else:
+                tool_call_id = getattr(tool_call, "id", None) or getattr(tool_call, "tool_call_id", None)
+            
+            if not tool_call_id:
+                tool_call_id = f"call_{uuid.uuid4().hex[:8]}"
+            
+            error_msg = f"ERROR: The language you tried to save is not supported. Supported languages are: {supported_langs_str}. You MUST apologize to the user, explain that the language is not supported, list the supported languages, and ask them to choose one. Do NOT make any more tool calls. Respond directly and briefly."
+            messages.append(ToolMessage(content=error_msg, tool_call_id=str(tool_call_id), name="upsert_profile"))
+        
+        # Force a direct response with clear instructions
+        messages.append(SystemMessage(content=f"CRITICAL: The user requested an unsupported language. You MUST respond with a brief, friendly apology. Tell them the language is not currently supported. List these supported languages: {supported_langs_str}. Ask them to choose one. Be concise - no chit-chat. Do NOT make any tool calls."))
+        
+        # Get new response that acknowledges the error
+        response = await llm_with_tools.ainvoke(messages)
+        
+        # Ensure we have a response
+        if not response or not hasattr(response, 'content') or not response.content:
+            # Fallback response
+            return f"I'm sorry, but the language you requested is not currently supported. I can help you learn: {supported_langs_str}. Which one would you like to learn?"
+        
+        return response.content
+    
     # Handle tool calls if any (e.g., upsert_profile to save user info)
     # Add max iterations limit to prevent infinite loops
     max_tool_iterations = 5
     tool_iteration = 0
-    unsupported_language_detected = False
     
     while hasattr(response, 'tool_calls') and response.tool_calls and tool_iteration < max_tool_iterations:
         tool_iteration += 1
