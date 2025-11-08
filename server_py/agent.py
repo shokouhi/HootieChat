@@ -77,12 +77,12 @@ tools = [upsert_profile, get_profile, save_assessment, save_quiz_result]
 
 # Test type definitions
 TEST_TYPES = [
-    "unit_completion",      # (1) Unit completion tasks
-    "keyword_match",        # (2) Rapid review keyword match
-    "pronunciation",        # (3) Pronunciation
-    "podcast",              # (4) Podcast listening
-    "reading",              # (5) Reading comprehension
-    "image_detection"       # (6) Image detection/recognition
+    "image_detection",      # (1) Image detection/recognition
+    "unit_completion",      # (2) Unit completion tasks
+    "keyword_match",        # (3) Rapid review keyword match
+    "pronunciation",        # (4) Pronunciation
+    "podcast",              # (5) Podcast listening
+    "reading"               # (6) Reading comprehension
 ]
 
 # Bind tools to LLM
