@@ -309,10 +309,35 @@ async def generate_audio_from_conversation(conversation: str, target_language: s
         }
         lang_code = language_code_map.get(target_language, "en-US")  # Default to English if not mapped
         
-        VOICE_MAP = {
-            "HOST_A": {"language_code": lang_code, "name": f"{lang_code}-Neural2-A"},  # Female voice
-            "HOST_B": {"language_code": lang_code, "name": f"{lang_code}-Neural2-B"},  # Male voice
+        # Voice name mapping - Arabic uses Standard voices, not Neural2
+        # Some languages don't support Neural2, so we need custom mappings
+        voice_name_map = {
+            "ar-XA": {
+                "HOST_A": "ar-XA-Standard-A",  # Female voice
+                "HOST_B": "ar-XA-Standard-B"   # Male voice
+            },
+            "ar-SA": {
+                "HOST_A": "ar-SA-Standard-A",
+                "HOST_B": "ar-SA-Standard-B"
+            },
+            "ar-EG": {
+                "HOST_A": "ar-EG-Standard-A",
+                "HOST_B": "ar-EG-Standard-B"
+            }
         }
+        
+        # Check if we have a custom voice mapping for this language
+        if lang_code in voice_name_map:
+            VOICE_MAP = {
+                "HOST_A": {"language_code": lang_code, "name": voice_name_map[lang_code]["HOST_A"]},
+                "HOST_B": {"language_code": lang_code, "name": voice_name_map[lang_code]["HOST_B"]}
+            }
+        else:
+            # Default: try Neural2 for other languages
+            VOICE_MAP = {
+                "HOST_A": {"language_code": lang_code, "name": f"{lang_code}-Neural2-A"},  # Female voice
+                "HOST_B": {"language_code": lang_code, "name": f"{lang_code}-Neural2-B"},  # Male voice
+            }
         
         def to_ssml(text: str) -> str:
             """Convert text to SSML format."""
