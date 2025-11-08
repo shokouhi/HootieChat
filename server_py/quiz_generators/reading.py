@@ -6,7 +6,7 @@ import re
 import feedparser
 import random
 from .utils import get_llm, get_user_level, get_target_language
-from .cefr_utils import format_cefr_for_prompt
+from .cefr_utils import format_cefr_for_prompt, get_difficulty_guidelines
 from tools import get_profile, get_session
 
 llm = get_llm()
@@ -80,33 +80,35 @@ async def generate_reading(session_id: str) -> Dict[str, Any]:
     # Get target language
     target_language = get_target_language(profile)
     
-    # Get CEFR description for the target level
+    # Get CEFR description and difficulty guidelines for the target level
     cefr_info = format_cefr_for_prompt(target_level)
+    difficulty_guide = get_difficulty_guidelines(target_level)
     
     # Step 2: Translate article to target language at user's level
     translation_prompt = f"""Translate the following English sports news article to {target_language}, adapting it for a student at the following CEFR level:
 
 {cefr_info}
 
+DIFFICULTY GUIDELINES FOR {target_level}:
+{difficulty_guide}
+
 Original Title: {original_title}
 
 Original Article: {original_summary}
 
-CRITICAL REQUIREMENTS FOR A1 LEVEL:
-- Use ONLY basic vocabulary (e.g., "jugar" not "competir", "ganar" not "triunfar")
-- Use simple present tense primarily ("juega", "gana", "es")
-- Keep sentences SHORT (maximum 8-10 words per sentence)
-- Use simple sentence structures (subject + verb + object)
-- Avoid complex grammar (no subjunctive, no compound tenses unless essential)
-- Use common everyday words - if the article uses advanced vocabulary, replace with simpler equivalents
-- Break long sentences into multiple short sentences
-- Maximum 150 words in {target_language} for A1, 200 words for A2, up to 400 for higher levels
+CRITICAL REQUIREMENTS - YOU MUST STRICTLY FOLLOW THE DIFFICULTY GUIDELINES ABOVE:
+- VOCABULARY: Use ONLY words within the vocabulary range specified (e.g., for A1: only 300-500 most common words)
+- GRAMMAR: Follow the grammar restrictions exactly as specified in the guidelines
+- SENTENCE LENGTH: Respect the maximum sentence length (e.g., A1: max 8-10 words per sentence, B2: max 20-30 words)
+- COMPLEXITY: Match the complexity level exactly as described in the guidelines
+- For A1/A2: HEAVILY simplify - break long sentences, replace advanced vocabulary with basic equivalents
+- For B1+: Can use more complex structures, but still within the guidelines
+- Maximum length: 100-150 words for A1, 150-200 for A2, 200-300 for B1-B2, up to 400 for C1-C2
 
 Requirements:
-- Translate to natural but SIMPLE {target_language} appropriate for the student's exact level
-- Match the vocabulary and sentence complexity EXACTLY to the level described above
-- For A1/A2: HEAVILY simplify - use only the most basic {target_language} vocabulary and grammar
-- Simplify complex sentences (break them into shorter, simpler ones)
+- Translate to natural {target_language} that EXACTLY matches the student's level
+- Match the vocabulary, grammar, and sentence structure PRECISELY to the guidelines above
+- Simplify or expand as needed to match the target level
 - Maintain all key information and facts
 - Keep it engaging and readable at the student's exact level
 

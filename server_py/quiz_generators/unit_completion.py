@@ -4,7 +4,7 @@ from langchain_core.messages import SystemMessage, HumanMessage
 import json
 import re
 from .utils import get_llm, get_user_level, get_target_language
-from .cefr_utils import format_cefr_for_prompt
+from .cefr_utils import format_cefr_for_prompt, get_difficulty_guidelines
 from tools import get_profile, get_session
 
 llm = get_llm()
@@ -53,22 +53,25 @@ async def generate_unit_completion(session_id: str) -> Dict[str, Any]:
     # Get target language
     target_language = get_target_language(profile)
     
-    # Get CEFR description for the target level
+    # Get CEFR description and difficulty guidelines for the target level
     cefr_info = format_cefr_for_prompt(target_level)
+    difficulty_guide = get_difficulty_guidelines(target_level)
     
     prompt = f"""Generate a {target_language} sentence completion exercise for a student at the following CEFR level:
 
 {cefr_info}
 
+DIFFICULTY GUIDELINES FOR {target_level}:
+{difficulty_guide}
+
 Requirements:
-- Create 2-3 short, related sentences (total 15-30 words)
-- The content should match the student's language abilities as described above
+- Create 2-3 short, related sentences (total 15-30 words for A1-A2, up to 50 words for higher levels)
+- STRICTLY MATCH the vocabulary, grammar, and sentence complexity to the guidelines above
 - If interests provided ({interests}), use that TOPIC/THEME for content (e.g., if "tennis", write about tennis in general, NOT about the specific student)
 - NEVER use the student's actual name, age, or personal details in the content
 - Use generic subjects like "personas", "alguien", "gente", or "un estudiante" (not specific names)
-- Choose ONE key word to mask (noun, verb, adjective, or adverb)
-- The masked word should be appropriate for the student's level as described above
-- Make the context clear enough that the word can be guessed based on the student's level
+- Choose ONE key word to mask (noun, verb, adjective, or adverb) - the masked word MUST match the vocabulary level specified above
+- Make the context clear enough that the word can be guessed, but ensure the entire exercise matches the student's level
 
 Format:
 1. Write the sentences with [MASK] where the word should go

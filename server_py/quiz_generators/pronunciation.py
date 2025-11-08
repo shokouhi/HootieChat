@@ -8,7 +8,7 @@ import os
 import subprocess
 import shutil
 from .utils import get_llm, get_user_level, get_target_language
-from .cefr_utils import format_cefr_for_prompt
+from .cefr_utils import format_cefr_for_prompt, get_difficulty_guidelines
 from tools import get_profile, get_session
 
 llm = get_llm()
@@ -53,22 +53,26 @@ async def generate_pronunciation(session_id: str) -> Dict[str, Any]:
     # Get target language
     target_language = get_target_language(profile)
     
-    # Get CEFR description for the target level
+    # Get CEFR description and difficulty guidelines for the target level
     cefr_info = format_cefr_for_prompt(target_level)
+    difficulty_guide = get_difficulty_guidelines(target_level)
     
-    prompt = f"""Generate a short {target_language} sentence (3-8 words) for pronunciation practice.
+    prompt = f"""Generate a short {target_language} sentence for pronunciation practice.
 
 Student's CEFR Level:
 {cefr_info}
 
+DIFFICULTY GUIDELINES FOR {target_level}:
+{difficulty_guide}
+
 Requirements:
-- The sentence should match the student's language abilities as described above
+- STRICTLY MATCH the vocabulary and grammar complexity to the guidelines above
 - If interests provided ({interests}), use that TOPIC/THEME for the sentence content (e.g., if "tennis", write a sentence about tennis in general)
 - NEVER use the student's actual name, age, or personal details
 - Sentence should be natural and conversational
-- Vocabulary and complexity should match the level described above
+- Length: 3-6 words for A1-A2, 5-10 words for B1-B2, up to 15 words for C1-C2
+- Use ONLY vocabulary within the range specified for this level
 - Good for pronunciation practice (mix of vowels, consonants, common sounds)
-- Maximum 8 words, minimum 3 words
 
 Return ONLY the sentence, nothing else. No punctuation marks except period at the end if needed.
 Examples ({target_language}):

@@ -6,7 +6,7 @@ import re
 import base64
 import requests
 from .utils import get_llm, get_user_level, get_target_language
-from .cefr_utils import format_cefr_for_prompt
+from .cefr_utils import format_cefr_for_prompt, get_difficulty_guidelines
 from tools import get_profile, get_session
 from config import CONFIG
 
@@ -47,24 +47,31 @@ async def generate_image_detection(session_id: str) -> Dict[str, Any]:
     # Get target language
     target_language = get_target_language(profile)
     
-    # Get CEFR description for the target level
+    # Get CEFR description and difficulty guidelines for the target level
     cefr_info = format_cefr_for_prompt(target_level)
+    difficulty_guide = get_difficulty_guidelines(target_level)
     
     # Step 1: LLM picks a word in target language for an object
     prompt1 = f"""Select a {target_language} word for a common, recognizable object appropriate for a student at the following CEFR level:
 
 {cefr_info}
 
-The word should be:
-- A noun (object/item)
-- Common and easily recognizable
-- Appropriate vocabulary for the student's level as described above
-- Something that can be clearly illustrated in a simple cartoon style
+VOCABULARY DIFFICULTY FOR {target_level}:
+{difficulty_guide}
+
+The word MUST:
+- Be a noun (object/item)
+- Be within the vocabulary range specified in the difficulty guidelines above
+- Be common and easily recognizable
+- Be something that can be clearly illustrated in a simple cartoon style
+- For A1: Use ONLY basic everyday objects (cat, house, book, apple, etc.)
+- For A2-B1: Common objects with slightly more variety
+- For B2+: Can include more abstract or specialized objects
 
 Return ONLY the {target_language} word, nothing else.
-Example for A1-A2 ({target_language}): [Provide {target_language} words appropriate for A1-A2 level]
-Example for B1-B2 ({target_language}): [Provide {target_language} words appropriate for B1-B2 level]
-Example for C1-C2 ({target_language}): [Provide {target_language} words appropriate for C1-C2 level]
+Example for A1-A2 ({target_language}): gato, mesa, libro, manzana
+Example for B1-B2 ({target_language}): bicicleta, computadora, restaurante
+Example for C1-C2 ({target_language}): arquitectura, fenómeno, dispositivo
 
 Return the word now:"""
 

@@ -10,7 +10,7 @@ import subprocess
 import shutil
 import base64
 from .utils import get_llm, get_user_level, get_target_language
-from .cefr_utils import format_cefr_for_prompt
+from .cefr_utils import format_cefr_for_prompt, get_difficulty_guidelines
 from tools import get_profile, get_session
 
 # Google TTS imports
@@ -69,22 +69,27 @@ async def generate_podcast(session_id: str) -> Dict[str, Any]:
     # Get target language
     target_language = get_target_language(profile)
     
-    # Get CEFR description for the target level
+    # Get CEFR description and difficulty guidelines for the target level
     cefr_info = format_cefr_for_prompt(target_level)
+    difficulty_guide = get_difficulty_guidelines(target_level)
     
     prompt = f"""Generate a short {target_language} conversation between two people (María (female) and Juan (male)) for a listening comprehension exercise.
 
 Student's CEFR Level:
 {cefr_info}
 
+DIFFICULTY GUIDELINES FOR {target_level}:
+{difficulty_guide}
+
 Requirements:
-- The conversation should match the student's language abilities as described above
+- STRICTLY MATCH the vocabulary, grammar, and sentence complexity to the guidelines above
 - Topic/theme: {interests} (use this topic generally, e.g., if "tennis", write about tennis in general)
 - NEVER use the student's actual name, age, or personal details in the conversation
 - Always use María (female) and Juan (male) as the speakers
-- Maximum 7 sentences total (distributed between both speakers)
-- Natural, conversational {target_language} appropriate for the student's level
-- Vocabulary and sentence structure should match the level described above
+- Maximum 5 sentences total for A1-A2, 7 sentences for B1+
+- Natural, conversational {target_language} that EXACTLY matches the student's level
+- Each sentence MUST follow the sentence structure limits in the guidelines (e.g., max 8-10 words for A1)
+- Use ONLY vocabulary within the range specified for this level
 - Clear dialogue with speaker labels (María:, Juan:)
 - Output PLAIN TEXT ONLY - NO HTML, NO audio tags, NO markdown formatting
 

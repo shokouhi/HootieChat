@@ -125,3 +125,62 @@ def format_cefr_for_prompt(level: str) -> str:
     else:
         return f"{level_name}: {description}"
 
+def get_difficulty_guidelines(level: str) -> str:
+    """
+    Get specific difficulty guidelines for a CEFR level.
+    This provides actionable guidance on vocabulary, grammar, and complexity.
+    """
+    # Extract base level if range (e.g., "A1-A2" -> "A2")
+    if "-" in level:
+        parts = level.split("-")
+        base_level = parts[1].strip().upper() if len(parts) == 2 else parts[0].strip().upper()
+    else:
+        base_level = level.upper()
+    
+    guidelines = {
+        "A1": """
+VOCABULARY: Use only the 300-500 most common words (basic nouns, verbs, adjectives)
+GRAMMAR: Simple present tense, basic past tense. Avoid subjunctive, conditionals, complex tenses
+SENTENCE STRUCTURE: Maximum 8-10 words per sentence. Subject-verb-object only
+COMPLEXITY: Concrete, everyday topics. Direct, simple statements
+EXAMPLES: "I am happy", "The cat is black", "I like pizza"
+""",
+        "A2": """
+VOCABULARY: Use common words (500-1000 most frequent). Basic descriptive vocabulary
+GRAMMAR: Present, simple past, simple future. Basic conjunctions (and, but, because)
+SENTENCE STRUCTURE: Maximum 12-15 words per sentence. Simple compound sentences allowed
+COMPLEXITY: Everyday situations, familiar topics. Slightly more detailed descriptions
+EXAMPLES: "I went to the store yesterday", "She likes reading because it's interesting"
+""",
+        "B1": """
+VOCABULARY: Wider range (1000-2000 words). Include some abstract concepts
+GRAMMAR: All basic tenses, conditional, some modal verbs. Simple relative clauses
+SENTENCE STRUCTURE: 15-20 words per sentence. Multiple clauses with clear connections
+COMPLEXITY: Abstract ideas, opinions, experiences. Moderate detail and explanation
+EXAMPLES: "I would go if I had time", "The book that I read was about history"
+""",
+        "B2": """
+VOCABULARY: Extensive vocabulary (2000-4000 words). Abstract and specialized terms
+GRAMMAR: All tenses including subjunctive (if applicable). Complex sentences with multiple clauses
+SENTENCE STRUCTURE: 20-30 words per sentence. Complex subordination and coordination
+COMPLEXITY: Complex ideas, nuanced opinions, detailed explanations
+EXAMPLES: "Had I known about the situation, I would have acted differently"
+""",
+        "C1": """
+VOCABULARY: Advanced vocabulary (4000+ words). Idiomatic expressions, subtle distinctions
+GRAMMAR: Full range including advanced structures. Sophisticated use of all tenses
+SENTENCE STRUCTURE: 25-40 words per sentence. Multiple embedded clauses
+COMPLEXITY: Sophisticated ideas, implicit meanings, cultural references
+EXAMPLES: "Despite having been repeatedly warned, the committee proceeded with their controversial decision"
+""",
+        "C2": """
+VOCABULARY: Near-native vocabulary. Precise word choice, cultural nuances, specialized terminology
+GRAMMAR: Perfect command of all structures. Creative and flexible use
+SENTENCE STRUCTURE: Any length. Complex nested structures, sophisticated transitions
+COMPLEXITY: Highly abstract concepts, subtle implications, professional/academic discourse
+EXAMPLES: "The paradigm shift notwithstanding, the underlying assumptions remain fundamentally unchallenged"
+"""
+    }
+    
+    return guidelines.get(base_level, guidelines["A1"])
+

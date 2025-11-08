@@ -4,7 +4,7 @@ from langchain_core.messages import SystemMessage, HumanMessage
 import json
 import re
 from .utils import get_llm, get_user_level, get_target_language
-from .cefr_utils import format_cefr_for_prompt
+from .cefr_utils import format_cefr_for_prompt, get_difficulty_guidelines
 from tools import get_profile, get_session
 
 llm = get_llm()
@@ -51,21 +51,27 @@ async def generate_keyword_match(session_id: str) -> Dict[str, Any]:
     # Get target language
     target_language = get_target_language(profile)
     
-    # Get CEFR description for the target level
+    # Get CEFR description and difficulty guidelines for the target level
     cefr_info = format_cefr_for_prompt(target_level)
+    difficulty_guide = get_difficulty_guidelines(target_level)
     
     prompt = f"""Generate 5 {target_language}-English word pairs for a vocabulary matching exercise.
 
 Student's CEFR Level:
 {cefr_info}
 
+VOCABULARY DIFFICULTY FOR {target_level}:
+{difficulty_guide}
+
 Requirements:
-- Choose vocabulary appropriate for the student's language abilities as described above
+- Choose vocabulary that STRICTLY matches the vocabulary range specified in the guidelines above
 - If interests provided ({interests}), choose vocabulary related to that TOPIC/THEME (e.g., if "tennis", include tennis-related words)
 - NEVER use the student's actual name, age, or personal details
 - Generate exactly 5 pairs
 - Each pair should be one {target_language} word and its English translation
-- Words should match the vocabulary level described above
+- For A1: Use ONLY the 300-500 most basic words
+- For A2: Use common words (500-1000 range)
+- For B1+: Can include more advanced vocabulary as specified in guidelines
 - Mix different word types (nouns, verbs, adjectives, etc.)
 - Personalize vocabulary to student interests when possible
 
