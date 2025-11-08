@@ -119,7 +119,14 @@ assess_prompt = ChatPromptTemplate.from_messages([
     ("human", "Evaluate this message per CEFR rubric.\n\nUser:\n{last_user}\n\nRubric:\n{cefr_rubric}")
 ])
 
-assess_chain = assess_prompt | llm | StrOutputParser()
+_assess_chain = None
+def get_assess_chain():
+    global _assess_chain, llm
+    if _assess_chain is None:
+        if llm is None:
+            llm = get_llm()
+        _assess_chain = assess_prompt | llm | StrOutputParser()
+    return _assess_chain
 
 # 2) Correction policy → JSON
 correct_prompt = ChatPromptTemplate.from_messages([
@@ -127,7 +134,14 @@ correct_prompt = ChatPromptTemplate.from_messages([
     ("human", "Apply the correction policy and return JSON.\n\nUser:\n{last_user}\n\nPolicy:\n{correction_policy}")
 ])
 
-correct_chain = correct_prompt | llm | StrOutputParser()
+_correct_chain = None
+def get_correct_chain():
+    global _correct_chain, llm
+    if _correct_chain is None:
+        if llm is None:
+            llm = get_llm()
+        _correct_chain = correct_prompt | llm | StrOutputParser()
+    return _correct_chain
 
 # Quiz-based CEFR assessment → JSON
 quiz_assess_prompt = ChatPromptTemplate.from_messages([
@@ -135,7 +149,14 @@ quiz_assess_prompt = ChatPromptTemplate.from_messages([
     ("human", "Evaluate this user's overall language proficiency in their target language based on ALL their quiz results:\n\n{quiz_results_summary}\n\nRubric:\n{quiz_cefr_assessment}")
 ])
 
-quiz_assess_chain = quiz_assess_prompt | llm | StrOutputParser()
+_quiz_assess_chain = None
+def get_quiz_assess_chain():
+    global _quiz_assess_chain, llm
+    if _quiz_assess_chain is None:
+        if llm is None:
+            llm = get_llm()
+        _quiz_assess_chain = quiz_assess_prompt | llm | StrOutputParser()
+    return _quiz_assess_chain
 
 # Quiz performance scorer → JSON (0-100 score)
 quiz_scorer_prompt = ChatPromptTemplate.from_messages([
@@ -143,7 +164,14 @@ quiz_scorer_prompt = ChatPromptTemplate.from_messages([
     ("human", "Quiz Type: {test_type}\nStudent's Response: {user_input}\nExpected Answer/Criteria: {expected_info}\nRaw Metrics (if applicable): {raw_metrics}\nDifficulty Level: {difficulty_level}")
 ])
 
-quiz_scorer_chain = quiz_scorer_prompt | llm | StrOutputParser()
+_quiz_scorer_chain = None
+def get_quiz_scorer_chain():
+    global _quiz_scorer_chain, llm
+    if _quiz_scorer_chain is None:
+        if llm is None:
+            llm = get_llm()
+        _quiz_scorer_chain = quiz_scorer_prompt | llm | StrOutputParser()
+    return _quiz_scorer_chain
 
 # User intent detection → JSON
 intent_detection_prompt = ChatPromptTemplate.from_messages([
@@ -157,7 +185,14 @@ Understand natural language - users may express preferences in various ways like
     ("human", "User message: {user_message}\n\nReturn JSON: {{\"is_help_request\": bool, \"is_language_question\": bool, \"requested_test_type\": \"string or null\", \"test_type_preferences\": {{\"unit_completion\": 0, \"keyword_match\": 0, \"pronunciation\": 0, \"podcast\": 0, \"reading\": 0, \"image_detection\": 0}}}}")
 ])
 
-intent_detection_chain = intent_detection_prompt | llm | StrOutputParser()
+_intent_detection_chain = None
+def get_intent_detection_chain():
+    global _intent_detection_chain, llm
+    if _intent_detection_chain is None:
+        if llm is None:
+            llm = get_llm()
+        _intent_detection_chain = intent_detection_prompt | llm | StrOutputParser()
+    return _intent_detection_chain
 
 # 3) Lesson planner → JSON
 async def lesson_plan_func(input_dict: Dict[str, Any]) -> str:
@@ -676,6 +711,7 @@ def build_agent():
             quiz_summary_text += f"\n\nAverage Score: {avg_score*100:.1f}%\nTotal Tests: {len(quiz_results)}"
             
             # Get overall CEFR assessment from quiz results
+            quiz_assess_chain = get_quiz_assess_chain()
             quiz_assess_result = await quiz_assess_chain.ainvoke({
                 "quiz_results_summary": quiz_summary_text,
                 "quiz_cefr_assessment": QUIZ_CEFR_ASSESSMENT
@@ -698,6 +734,7 @@ def build_agent():
         
         if user and user.strip() and not is_quiz_completion:
             try:
+                intent_detection_chain = get_intent_detection_chain()
                 intent_result = await intent_detection_chain.ainvoke({"user_message": user})
                 # Parse JSON from response
                 intent_text = intent_result.strip()
@@ -782,6 +819,7 @@ def build_agent():
         
         # 1. Assess CEFR level from conversation
         print(f"[Agent] 📊 Step 1: Assessing CEFR level...")
+        assess_chain = get_assess_chain()
         assessment_result = await assess_chain.ainvoke({
             "last_user": user,
             "cefr_rubric": CEFR_RUBRIC
