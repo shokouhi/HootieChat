@@ -1,0 +1,13 @@
+{
+  "name": "mi-profe-ai",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently \"cd server_py && python run.py\" \"npm run dev --prefix web\"",
+    "dev:server": "cd server_py && python run.py",
+    "dev:web": "npm run dev --prefix web"
+  },
+  "devDependencies": {
+    "concurrently": "^9.0.1"
+  }
+}
+
