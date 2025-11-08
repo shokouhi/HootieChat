@@ -46,6 +46,9 @@ async def generate_pronunciation(session_id: str) -> Dict[str, Any]:
     
     # Get interests for personalization
     interests = profile.get("interests", "")
+    # Handle both string and list formats
+    if isinstance(interests, list):
+        interests = ", ".join(interests) if interests else ""
     
     # Get target language
     target_language = get_target_language(profile)

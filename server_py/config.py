@@ -7,6 +7,8 @@ class Config:
     PROVIDER = os.getenv("PROVIDER", "openai")  # 'openai' | 'google'
     OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
     GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY", "")
+    GOOGLE_PROJECT_ID = os.getenv("GOOGLE_PROJECT_ID", "")  # For Vertex AI
+    GOOGLE_LOCATION = os.getenv("GOOGLE_LOCATION", "us-central1")  # Vertex AI location
     
     # Model selection
     OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4")  # gpt-4, gpt-3.5-turbo, gpt-4-turbo

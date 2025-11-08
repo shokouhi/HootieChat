@@ -101,40 +101,149 @@ The image should look like it belongs in the Duolingo app - fun, educational, an
     image_url = None
     image_base64 = None
     
+    def generate_svg_placeholder(word: str) -> str:
+        """Generate a simple SVG placeholder image for the word."""
+        # Create a colorful, educational SVG placeholder
+        colors = [
+            "#58CC02",  # Duolingo green
+            "#1CB0F6",  # Duolingo blue
+            "#FFC800",  # Duolingo yellow
+            "#FF9600",  # Orange
+            "#CE82FF",  # Purple
+        ]
+        import random
+        color = random.choice(colors)
+        
+        # Create SVG with word displayed prominently
+        svg = f'''<svg width="400" height="400" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:{color};stop-opacity:1" />
+      <stop offset="100%" style="stop-color:{color}88;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  <rect width="400" height="400" fill="url(#grad)" rx="20"/>
+  <circle cx="200" cy="150" r="60" fill="white" opacity="0.3"/>
+  <text x="200" y="280" font-family="Arial, sans-serif" font-size="48" font-weight="bold" 
+        fill="white" text-anchor="middle">{word.upper()}</text>
+  <text x="200" y="320" font-family="Arial, sans-serif" font-size="24" 
+        fill="white" text-anchor="middle" opacity="0.9">🖼️</text>
+</svg>'''
+        # Convert SVG to base64
+        svg_bytes = svg.encode('utf-8')
+        return base64.b64encode(svg_bytes).decode('utf-8')
+    
     try:
-        import google.generativeai as genai
+        vertex_success = False
         
-        # Configure Google Generative AI
-        genai.configure(api_key=CONFIG.GOOGLE_API_KEY)
-        
-        # Use Imagen 3 for image generation
-        # The generate_images method is available in google-generativeai
-        try:
-            # Generate image using Imagen
-            result = genai.GenerativeModel('imagen-3.0-generate-001').generate_images(
-                prompt=image_prompt,
-                number_of_images=1,
-                aspect_ratio='1:1',
-                safety_filter_level='block_some',
-                person_generation='allow_all'
-            )
+        # Try Vertex AI Imagen API first (if project ID is configured)
+        if CONFIG.GOOGLE_PROJECT_ID:
+            # Use Vertex AI endpoint
+            location = CONFIG.GOOGLE_LOCATION
+            project_id = CONFIG.GOOGLE_PROJECT_ID
+            vertex_api_url = f"https://{location}-aiplatform.googleapis.com/v1/projects/{project_id}/locations/{location}/publishers/google/models/imagen-3.0-generate-001:predict"
             
-            # Extract base64 image data
-            if result and len(result.images) > 0:
-                image_data = result.images[0]
-                # If it's already base64, use it directly; otherwise convert
-                if isinstance(image_data, str):
-                    image_base64 = image_data
-                else:
-                    # Convert bytes to base64
-                    image_base64 = base64.b64encode(image_data).decode('utf-8')
+            # Get access token for Vertex AI
+            try:
+                import google.auth
+                from google.auth.transport.requests import Request
+                import os
+                
+                credentials = None
+                try:
+                    # Define required scopes for Vertex AI
+                    scopes = ['https://www.googleapis.com/auth/cloud-platform']
                     
-        except (AttributeError, TypeError) as api_error:
-            # Fallback: Try using REST API directly
-            print(f"[Image Gen] Direct API call failed, trying REST API...")
-            
-            # Use Google AI Studio REST API for image generation
-            api_url = "https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-001:generateImages"
+                    # Try to use service account credentials if available
+                    if os.getenv("GOOGLE_APPLICATION_CREDENTIALS"):
+                        creds_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
+                        # Handle relative paths
+                        if not os.path.isabs(creds_path):
+                            server_py_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+                            creds_path = os.path.join(server_py_dir, creds_path)
+                        
+                        from google.oauth2 import service_account
+                        credentials = service_account.Credentials.from_service_account_file(
+                            creds_path,
+                            scopes=scopes
+                        )
+                        project = project_id  # Use the project ID from config
+                    else:
+                        # Try default credentials with scopes
+                        credentials, project = google.auth.default(scopes=scopes)
+                except Exception as auth_error:
+                    print(f"[Image Gen] ⚠️ Auth error: {auth_error}. Trying API key method...")
+                    credentials = None
+                
+                headers = {
+                    "Content-Type": "application/json"
+                }
+                
+                # Add authorization header
+                if credentials:
+                    if not credentials.valid:
+                        credentials.refresh(Request())
+                    headers["Authorization"] = f"Bearer {credentials.token}"
+                elif CONFIG.GOOGLE_API_KEY:
+                    # Fallback: try with API key in URL (may not work for Vertex AI)
+                    vertex_api_url = f"{vertex_api_url}?key={CONFIG.GOOGLE_API_KEY}"
+                
+                payload = {
+                    "instances": [{
+                        "prompt": image_prompt
+                    }],
+                    "parameters": {
+                        "sampleCount": 1,
+                        "aspectRatio": "1:1",
+                        "safetyFilterLevel": "BLOCK_SOME",
+                        "personGeneration": "ALLOW_ALL"
+                    }
+                }
+                
+                print(f"[Image Gen] Trying Vertex AI endpoint: {location}-aiplatform.googleapis.com")
+                img_response = requests.post(
+                    vertex_api_url,
+                    headers=headers,
+                    json=payload,
+                    timeout=30
+                )
+                
+                if img_response.status_code == 200:
+                    result = img_response.json()
+                    # Vertex AI response structure
+                    if 'predictions' in result and len(result['predictions']) > 0:
+                        prediction = result['predictions'][0]
+                        if 'bytesBase64Encoded' in prediction:
+                            image_base64 = prediction['bytesBase64Encoded']
+                        elif 'imageBytes' in prediction:
+                            image_base64 = prediction['imageBytes']
+                        elif 'image' in prediction:
+                            image_base64 = prediction['image']
+                        else:
+                            # Try to find base64 in any field
+                            for key, value in prediction.items():
+                                if isinstance(value, str) and len(value) > 100:
+                                    image_base64 = value
+                                    break
+                        
+                        if image_base64:
+                            print(f"[Image Gen] ✅ Successfully generated image via Vertex AI Imagen API")
+                            vertex_success = True
+                    else:
+                        print(f"[Image Gen] ⚠️ Vertex AI response missing predictions: {result}")
+                elif img_response.status_code == 404:
+                    print(f"[Image Gen] ⚠️ Vertex AI endpoint not found (404). Trying Generative AI Studio endpoint...")
+                else:
+                    error_text = img_response.text[:500] if img_response.text else "Unknown error"
+                    print(f"[Image Gen] ⚠️ Vertex AI error {img_response.status_code}: {error_text}")
+            except ImportError:
+                print(f"[Image Gen] ⚠️ google-auth library not installed. Install with: pip install google-auth")
+            except Exception as e:
+                print(f"[Image Gen] ⚠️ Vertex AI error: {e}")
+        
+        # Fallback: Try Generative AI Studio endpoint (if Vertex AI failed or not configured)
+        if not vertex_success:
+            api_url_alt = "https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-001:generateImages"
             
             headers = {
                 "Content-Type": "application/json"
@@ -148,11 +257,12 @@ The image should look like it belongs in the Duolingo app - fun, educational, an
                 "personGeneration": "allow_all"
             }
             
-            # Make request with API key in URL
+            print(f"[Image Gen] Trying Generative AI Studio endpoint...")
             img_response = requests.post(
-                f"{api_url}?key={CONFIG.GOOGLE_API_KEY}",
+                f"{api_url_alt}?key={CONFIG.GOOGLE_API_KEY}",
                 headers=headers,
-                json=payload
+                json=payload,
+                timeout=30
             )
             
             if img_response.status_code == 200:
@@ -161,20 +271,31 @@ The image should look like it belongs in the Duolingo app - fun, educational, an
                     image_base64 = result['generatedImages'][0].get('bytesBase64Encoded')
                 elif 'images' in result and len(result['images']) > 0:
                     image_base64 = result['images'][0].get('bytesBase64Encoded')
+                elif 'imageBytes' in result:
+                    image_base64 = result['imageBytes']
+                if image_base64:
+                    print(f"[Image Gen] ✅ Successfully generated image via Generative AI Studio")
+        
+        # If both failed, use SVG placeholder
+        if not image_base64:
+            if img_response and img_response.status_code == 404:
+                print(f"[Image Gen] ⚠️ Imagen API not available (404). Using SVG placeholder.")
+            elif img_response:
+                error_text = img_response.text[:200] if img_response.text else "Unknown error"
+                print(f"[Image Gen] ⚠️ API error {img_response.status_code}: {error_text}. Using SVG placeholder.")
             else:
-                raise Exception(f"Google API error: {img_response.status_code} - {img_response.text}")
+                print(f"[Image Gen] ⚠️ No project ID configured. Using SVG placeholder.")
+            image_base64 = generate_svg_placeholder(object_word)
+            print(f"[Image Gen] ✅ Generated SVG placeholder for '{object_word}'")
         
     except ImportError:
-        print("[Image Gen] google-generativeai not installed. Installing...")
-        import subprocess
-        subprocess.check_call(["pip", "install", "google-generativeai"])
-        print("[Image Gen] Please restart the server and retry image generation")
+        print("[Image Gen] requests library not available, using SVG placeholder")
+        image_base64 = generate_svg_placeholder(object_word)
     except Exception as e:
-        print(f"[Image Gen Error] {e}")
-        import traceback
-        traceback.print_exc()
-        # Fallback: return word without image, frontend can handle it
-        pass
+        error_msg = str(e)
+        print(f"[Image Gen] ⚠️ Error: {error_msg}. Using SVG placeholder.")
+        # Fallback to SVG placeholder
+        image_base64 = generate_svg_placeholder(object_word)
     
     return {
         "object_word": object_word,
@@ -185,12 +306,25 @@ The image should look like it belongs in the Duolingo app - fun, educational, an
     }
 
 async def validate_image_detection(session_id: str, user_answer: str, correct_word: str) -> Dict[str, Any]:
-    """Validate user's answer for image detection quiz."""
-    user_answer_clean = user_answer.lower().strip()
-    correct_word_clean = correct_word.lower().strip()
+    """Validate user's answer for image detection quiz using semantic matching."""
+    from .utils import get_llm
+    from langchain_core.messages import SystemMessage, HumanMessage
+    from tools import get_profile
+    import json
     
-    # Exact match
-    if user_answer_clean == correct_word_clean:
+    # Get target language for feedback
+    profile_str = await get_profile.ainvoke({"session_id": session_id})
+    try:
+        profile = json.loads(profile_str)
+        target_language = profile.get("target_language", "Spanish")
+    except:
+        target_language = "Spanish"
+    
+    user_answer_clean = user_answer.strip()
+    correct_word_clean = correct_word.strip()
+    
+    # First check exact match (fast path)
+    if user_answer_clean.lower() == correct_word_clean.lower():
         return {
             "correct": True,
             "score": 1.0,
@@ -198,32 +332,78 @@ async def validate_image_detection(session_id: str, user_answer: str, correct_wo
             "user_answer": user_answer
         }
     
-    # Normalize (remove accents)
-    def normalize(text: str) -> str:
-        replacements = {
-            'á': 'a', 'é': 'e', 'í': 'i', 'ó': 'o', 'ú': 'u',
-            'ñ': 'n'
-        }
-        for old, new in replacements.items():
-            text = text.replace(old, new)
-        return text.lower().strip()
+    # Use LLM for semantic matching
+    llm = get_llm()
+    prompt = f"""Evalúa si la palabra del estudiante es semánticamente equivalente a la palabra correcta.
+
+Palabra correcta: "{correct_word_clean}"
+Palabra del estudiante: "{user_answer_clean}"
+
+IMPORTANTE: No busques coincidencias exactas. Evalúa si ambas palabras se refieren al mismo objeto, concepto o cosa, incluso si son sinónimos o variaciones.
+
+Ejemplos de palabras semánticamente equivalentes:
+- "casa" y "hogar" (ambas se refieren a una vivienda)
+- "auto" y "coche" (ambas se refieren a un vehículo)
+- "perro" y "can" (ambas se refieren al mismo animal)
+- "feliz" y "contento" (ambas expresan el mismo estado emocional)
+
+Responde SOLO con JSON en este formato exacto:
+{{
+    "semantically_equivalent": true/false,
+    "score": 0.0-1.0,
+    "reason": "breve explicación en español"
+}}
+
+Si son semánticamente equivalentes, score debe ser >= 0.8. Si no lo son, score debe ser < 0.8."""
+
+    messages = [
+        SystemMessage(content=f"Eres un evaluador de vocabulario en {target_language}. Evalúa la equivalencia semántica, no coincidencias exactas de palabras."),
+        HumanMessage(content=prompt)
+    ]
     
-    user_normalized = normalize(user_answer_clean)
-    correct_normalized = normalize(correct_word_clean)
-    
-    if user_normalized == correct_normalized:
+    try:
+        response = await llm.ainvoke(messages)
+        content = response.content.strip()
+        
+        # Parse JSON from response
+        if content.startswith("```json"):
+            content = content[7:]
+        elif content.startswith("```"):
+            content = content[3:]
+        if content.endswith("```"):
+            content = content[:-3].strip()
+        
+        result = json.loads(content)
+        semantically_equivalent = result.get("semantically_equivalent", False)
+        score = float(result.get("score", 0.0))
+        reason = result.get("reason", "")
+        
+        # Ensure score is in valid range
+        score = max(0.0, min(1.0, score))
+        
+        if semantically_equivalent or score >= 0.8:
+            return {
+                "correct": True,
+                "score": score,
+                "feedback": "¡Correcto! Bien hecho." if score >= 0.95 else f"¡Bien! {reason if reason else 'Respuesta aceptada.'}",
+                "user_answer": user_answer
+            }
+        else:
+            return {
+                "correct": False,
+                "score": score,
+                "feedback": f"La respuesta correcta es '{correct_word}'. {reason if reason else '¡Sigue practicando!'}",
+                "correct_answer": correct_word,
+                "user_answer": user_answer
+            }
+    except Exception as e:
+        print(f"[Quiz Val] Error in semantic validation: {e}")
+        # Fallback to exact match check
         return {
-            "correct": True,
-            "score": 0.95,
-            "feedback": f"¡Casi perfecto! La respuesta correcta es '{correct_word}'. (Presta atención a los acentos)",
+            "correct": False,
+            "score": 0.0,
+            "feedback": f"La respuesta correcta es '{correct_word}'. ¡Sigue practicando!",
+            "correct_answer": correct_word,
             "user_answer": user_answer
         }
-    
-    return {
-        "correct": False,
-        "score": 0.0,
-        "feedback": f"La respuesta correcta es '{correct_word}'. ¡Sigue practicando!",
-        "correct_answer": correct_word,
-        "user_answer": user_answer
-    }
 

@@ -58,10 +58,18 @@ def normalize_cefr_level(level_input: str) -> str:
 
 def get_target_language(profile: dict) -> str:
     """
-    Get the target language from profile, defaulting to Spanish for backward compatibility.
+    Get the target language from profile.
     Returns the language name (e.g., "Spanish", "French", "German").
+    Raises ValueError if target_language is not set.
     """
-    return profile.get("target_language", "Spanish") if profile else "Spanish"
+    if not profile:
+        raise ValueError("Profile is required to determine target language")
+    
+    target_language = profile.get("target_language")
+    if not target_language:
+        raise ValueError("target_language must be set in profile before generating quizzes")
+    
+    return target_language
 
 def get_user_level(profile: dict, quiz_results: list) -> str:
     """

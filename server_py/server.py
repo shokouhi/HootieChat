@@ -36,6 +36,7 @@ class UnitCompletionValidateRequest(BaseModel):
     sessionId: str
     userAnswer: str
     maskedWord: str  # The correct answer to compare against
+    sentence: str  # The full sentence with [MASK] placeholder
 
 class KeywordMatchGenerateRequest(BaseModel):
     sessionId: str
@@ -228,7 +229,8 @@ async def validate_unit_completion_answer(request: UnitCompletionValidateRequest
         validation = await validate_unit_completion(
             request.sessionId,
             request.userAnswer,
-            request.maskedWord
+            request.maskedWord,
+            request.sentence
         )
         
         # Save quiz result with context for LLM scoring

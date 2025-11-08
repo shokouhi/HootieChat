@@ -59,7 +59,10 @@ async def generate_podcast(session_id: str) -> Dict[str, Any]:
     
     # Get interests or use random topic
     interests = profile.get("interests", "")
-    if not interests or interests.strip() == "":
+    # Handle both string and list formats
+    if isinstance(interests, list):
+        interests = ", ".join(interests) if interests else ""
+    if not interests or (isinstance(interests, str) and interests.strip() == ""):
         topics = ["deportes", "comida", "viajes", "música", "películas", "libros", "animales", "tecnología"]
         interests = random.choice(topics)
     
@@ -227,7 +230,7 @@ Generate now:"""
     
     if GOOGLE_TTS_AVAILABLE:
         try:
-            audio_result = await generate_audio_from_conversation(conversation)
+            audio_result = await generate_audio_from_conversation(conversation, target_language)
             audio_url = audio_result.get("audio_url")
             audio_base64 = audio_result.get("audio_base64")
         except Exception as e:
@@ -245,7 +248,7 @@ Generate now:"""
         "audio_base64": audio_base64
     }
 
-async def generate_audio_from_conversation(conversation: str) -> Dict[str, Any]:
+async def generate_audio_from_conversation(conversation: str, target_language: str) -> Dict[str, Any]:
     """
     Generate audio from conversation using Google TTS.
     Converts "Persona A: ... Persona B: ..." format to audio.
@@ -263,10 +266,22 @@ async def generate_audio_from_conversation(conversation: str) -> Dict[str, Any]:
         # Convert conversation format: "María: text" -> "HOST_A: text", "Juan: text" -> "HOST_B: text"
         script_text = conversation.replace("María:", "HOST_A:").replace("Juan:", "HOST_B:")
         
-        # Map speakers to distinct Spanish voices
+        # Map speakers to distinct voices based on target language
+        # Note: Currently supports Spanish voices. For other languages, voice codes need to be mapped
+        # TODO: Add language-to-voice-code mapping for other languages
+        language_code_map = {
+            "Spanish": "es-ES",
+            "French": "fr-FR",
+            "German": "de-DE",
+            "Italian": "it-IT",
+            "Portuguese": "pt-PT",
+            # Add more languages as needed
+        }
+        lang_code = language_code_map.get(target_language, "es-ES")  # Default to Spanish if not mapped
+        
         VOICE_MAP = {
-            "HOST_A": {"language_code": "es-ES", "name": "es-ES-Neural2-A"},  # Female Spanish voice
-            "HOST_B": {"language_code": "es-ES", "name": "es-ES-Neural2-B"},  # Male Spanish voice
+            "HOST_A": {"language_code": lang_code, "name": f"{lang_code}-Neural2-A"},  # Female voice
+            "HOST_B": {"language_code": lang_code, "name": f"{lang_code}-Neural2-B"},  # Male voice
         }
         
         def to_ssml(text: str) -> str:
@@ -390,49 +405,102 @@ async def generate_audio_from_conversation(conversation: str) -> Dict[str, Any]:
         return {"audio_url": None, "audio_base64": None}
 
 async def validate_podcast(session_id: str, user_answer: str, correct_answer: str) -> Dict[str, Any]:
-    """Validate user's answer for podcast quiz."""
-    user_answer_clean = user_answer.lower().strip()
-    correct_answer_clean = correct_answer.lower().strip()
+    """Validate user's answer for podcast quiz using semantic matching."""
+    from .utils import get_llm
+    from langchain_core.messages import SystemMessage, HumanMessage
+    from tools import get_profile
     
-    # Exact match
-    if user_answer_clean == correct_answer_clean:
+    # Get target language for feedback
+    profile_str = await get_profile.ainvoke({"session_id": session_id})
+    try:
+        profile = json.loads(profile_str)
+        target_language = profile.get("target_language", "Spanish")
+    except:
+        target_language = "Spanish"
+    
+    user_answer_clean = user_answer.strip()
+    correct_answer_clean = correct_answer.strip()
+    
+    # First check exact match (fast path)
+    if user_answer_clean.lower() == correct_answer_clean.lower():
         return {
             "correct": True,
             "score": 1.0,
             "feedback": "¡Correcto! Bien hecho."
         }
     
-    # Normalize (remove accents)
-    def normalize(text: str) -> str:
-        replacements = {
-            'á': 'a', 'é': 'e', 'í': 'i', 'ó': 'o', 'ú': 'u',
-            'ñ': 'n'
-        }
-        for old, new in replacements.items():
-            text = text.replace(old, new)
-        return text.lower().strip()
+    # Use LLM for semantic matching
+    llm = get_llm()
+    prompt = f"""Evalúa si la respuesta del estudiante es semánticamente equivalente a la respuesta correcta.
+
+Respuesta correcta: "{correct_answer_clean}"
+Respuesta del estudiante: "{user_answer_clean}"
+
+IMPORTANTE: No busques coincidencias exactas de palabras. Evalúa si ambas respuestas tienen el mismo significado semántico, incluso si usan palabras diferentes o estructuras diferentes.
+
+Ejemplos de respuestas semánticamente equivalentes:
+- "Sí, me gusta" y "Me encanta" (ambas expresan gusto positivo)
+- "No lo sé" y "No tengo idea" (ambas expresan falta de conocimiento)
+- "Está bien" y "De acuerdo" (ambas expresan acuerdo)
+
+Responde SOLO con JSON en este formato exacto:
+{{
+    "semantically_equivalent": true/false,
+    "score": 0.0-1.0,
+    "reason": "breve explicación en español"
+}}
+
+Si son semánticamente equivalentes, score debe ser >= 0.8. Si no lo son, score debe ser < 0.8."""
+
+    messages = [
+        SystemMessage(content=f"Eres un evaluador de respuestas en {target_language}. Evalúa la equivalencia semántica, no coincidencias exactas de palabras."),
+        HumanMessage(content=prompt)
+    ]
     
-    user_normalized = normalize(user_answer_clean)
-    correct_normalized = normalize(correct_answer_clean)
-    
-    if user_normalized == correct_normalized:
-        return {
-            "correct": True,
-            "score": 0.95,
-            "feedback": f"¡Casi perfecto! La respuesta correcta es '{correct_answer}'. (Presta atención a los acentos)"
-        }
-    
-    # Partial match (answer contains the word or vice versa)
-    if correct_answer_clean in user_answer_clean or user_answer_clean in correct_answer_clean:
+    try:
+        response = await llm.ainvoke(messages)
+        content = response.content.strip()
+        
+        # Parse JSON from response
+        if content.startswith("```json"):
+            content = content[7:]
+        elif content.startswith("```"):
+            content = content[3:]
+        if content.endswith("```"):
+            content = content[:-3].strip()
+        
+        result = json.loads(content)
+        semantically_equivalent = result.get("semantically_equivalent", False)
+        score = float(result.get("score", 0.0))
+        reason = result.get("reason", "")
+        
+        # Ensure score is in valid range
+        score = max(0.0, min(1.0, score))
+        
+        if semantically_equivalent or score >= 0.8:
+            return {
+                "correct": True,
+                "score": score,
+                "feedback": "¡Correcto! Bien hecho." if score >= 0.95 else f"¡Bien! {reason if reason else 'Respuesta aceptada.'}"
+            }
+        else:
+            return {
+                "correct": False,
+                "score": score,
+                "feedback": f"La respuesta correcta es '{correct_answer}'. {reason if reason else '¡Sigue practicando!'}"
+            }
+    except Exception as e:
+        print(f"[Quiz Val] Error in semantic validation: {e}")
+        # Fallback to exact match check
+        if correct_answer_clean.lower() in user_answer_clean.lower() or user_answer_clean.lower() in correct_answer_clean.lower():
+            return {
+                "correct": False,
+                "score": 0.5,
+                "feedback": f"Cerca, pero no exacto. La respuesta correcta es '{correct_answer}'."
+            }
         return {
             "correct": False,
-            "score": 0.5,
-            "feedback": f"Cerca, pero no exacto. La respuesta correcta es '{correct_answer}'."
+            "score": 0.0,
+            "feedback": f"La respuesta correcta es '{correct_answer}'. ¡Sigue practicando!"
         }
-    
-    return {
-        "correct": False,
-        "score": 0.0,
-        "feedback": f"La respuesta correcta es '{correct_answer}'. ¡Sigue practicando!"
-    }
 

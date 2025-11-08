@@ -45,6 +45,9 @@ async def generate_unit_completion(session_id: str) -> Dict[str, Any]:
     
     # Build prompt for LLM
     interests = profile.get("interests", "")
+    # Handle both string and list formats
+    if isinstance(interests, list):
+        interests = ", ".join(interests) if interests else ""
     # Use interests for TOPIC only, NEVER use name/age in content
     
     # Get target language
@@ -123,59 +126,132 @@ Generate the exercise now:"""
         "original_level": current_level
     }
 
-async def validate_unit_completion(session_id: str, user_answer: str, masked_word: str) -> Dict[str, Any]:
+async def validate_unit_completion(session_id: str, user_answer: str, masked_word: str, sentence: str) -> Dict[str, Any]:
     """
-    Validate user's answer against the correct masked word.
+    Validate user's answer by checking if it fits grammatically and contextually in the sentence.
     Returns: {
         "correct": bool,
         "score": float (0.0 to 1.0),
         "feedback": str
     }
     """
-    user_answer_clean = user_answer.lower().strip()
-    correct_answer_clean = masked_word.lower().strip()
+    from .utils import get_llm
+    from langchain_core.messages import SystemMessage, HumanMessage
+    from tools import get_profile
+    import re
     
-    # Exact match
-    if user_answer_clean == correct_answer_clean:
+    # Get target language for feedback
+    profile_str = await get_profile.ainvoke({"session_id": session_id})
+    try:
+        profile = json.loads(profile_str)
+        target_language = profile.get("target_language", "Spanish")
+    except:
+        target_language = "Spanish"
+    
+    user_answer_clean = user_answer.strip()
+    correct_answer_clean = masked_word.strip()
+    sentence_clean = sentence.strip()
+    
+    # First check exact match (fast path)
+    if user_answer_clean.lower() == correct_answer_clean.lower():
         return {
             "correct": True,
             "score": 1.0,
             "feedback": "¡Correcto! Bien hecho."
         }
     
-    # Check for close matches (handling accents, common variations)
-    # Remove accents for comparison
-    def normalize(text: str) -> str:
-        replacements = {
-            'á': 'a', 'é': 'e', 'í': 'i', 'ó': 'o', 'ú': 'u',
-            'ñ': 'n'
-        }
-        for old, new in replacements.items():
-            text = text.replace(old, new)
-        return text.lower().strip()
+    # Replace [MASK] or [mask] with the user's answer to create the test sentence
+    test_sentence = re.sub(r'\[MASK\]', user_answer_clean, sentence_clean, flags=re.IGNORECASE)
     
-    user_normalized = normalize(user_answer_clean)
-    correct_normalized = normalize(correct_answer_clean)
+    # Use LLM to check if the answer fits grammatically and contextually
+    llm = get_llm()
+    prompt = f"""Evalúa si la respuesta del estudiante encaja correctamente en la oración.
+
+Oración original con [MASK]:
+{sentence_clean}
+
+Oración con la respuesta del estudiante:
+{test_sentence}
+
+Respuesta del estudiante: "{user_answer_clean}"
+Respuesta correcta esperada: "{correct_answer_clean}"
+
+IMPORTANTE: 
+- NO busques que la respuesta sea semánticamente equivalente a la respuesta correcta
+- Evalúa si la respuesta del estudiante:
+  1. Encaja GRAMÁTICAMENTE en la oración (concordancia, género, número, etc.)
+  2. Tiene SENTIDO CONTEXTUAL en la oración (no es absurda o incoherente)
+
+Ejemplos:
+- "Me gusta jugar al tenis. Es un deporte muy [MASK]"
+  - "interesante" ✓ (gramaticalmente correcto, tiene sentido)
+  - "divertido" ✓ (gramaticalmente correcto, tiene sentido, aunque sea diferente de "interesante")
+  - "gato" ✗ (no tiene sentido contextual - "un deporte muy gato" es absurdo)
+  - "casa" ✗ (no tiene sentido contextual - "un deporte muy casa" es absurdo)
+
+Responde SOLO con JSON en este formato exacto:
+{{
+    "grammatically_correct": true/false,
+    "contextually_makes_sense": true/false,
+    "score": 0.0-1.0,
+    "reason": "breve explicación en {target_language}"
+}}
+
+Si es gramaticalmente correcto Y tiene sentido contextual, score debe ser >= 0.8. Si no, score debe ser < 0.8."""
+
+    messages = [
+        SystemMessage(content=f"Eres un evaluador de ejercicios de completar oraciones en {target_language}. Evalúa si la respuesta encaja gramaticalmente y contextualmente, no si es semánticamente equivalente a la respuesta esperada."),
+        HumanMessage(content=prompt)
+    ]
     
-    if user_normalized == correct_normalized:
-        return {
-            "correct": True,
-            "score": 0.95,  # Slight penalty for accent errors
-            "feedback": f"¡Casi perfecto! La respuesta correcta es '{masked_word}'. (Presta atención a los acentos)"
-        }
-    
-    # Partial credit for containing the word
-    if correct_answer_clean in user_answer_clean or user_answer_clean in correct_answer_clean:
+    try:
+        response = await llm.ainvoke(messages)
+        content = response.content.strip()
+        
+        # Parse JSON from response
+        if content.startswith("```json"):
+            content = content[7:]
+        elif content.startswith("```"):
+            content = content[3:]
+        if content.endswith("```"):
+            content = content[:-3].strip()
+        
+        result = json.loads(content)
+        grammatically_correct = result.get("grammatically_correct", False)
+        contextually_makes_sense = result.get("contextually_makes_sense", False)
+        score = float(result.get("score", 0.0))
+        reason = result.get("reason", "")
+        
+        # Ensure score is in valid range
+        score = max(0.0, min(1.0, score))
+        
+        # Accept if both grammatical and contextual checks pass, or if score is high enough
+        if (grammatically_correct and contextually_makes_sense) or score >= 0.8:
+            return {
+                "correct": True,
+                "score": score,
+                "feedback": "¡Correcto! Bien hecho." if score >= 0.95 else f"¡Bien! {reason if reason else 'Respuesta aceptada.'}"
+            }
+        else:
+            return {
+                "correct": False,
+                "score": score,
+                "feedback": f"La respuesta correcta es '{masked_word}'. {reason if reason else '¡Sigue practicando!'}"
+            }
+    except Exception as e:
+        print(f"[Quiz Val] Error in validation: {e}")
+        import traceback
+        traceback.print_exc()
+        # Fallback to exact match check
+        if correct_answer_clean.lower() in user_answer_clean.lower() or user_answer_clean.lower() in correct_answer_clean.lower():
+            return {
+                "correct": False,
+                "score": 0.5,
+                "feedback": f"Cerca, pero no exacto. La respuesta correcta es '{masked_word}'."
+            }
         return {
             "correct": False,
-            "score": 0.3,
-            "feedback": f"Cerca, pero no exacto. La respuesta correcta es '{masked_word}'."
+            "score": 0.0,
+            "feedback": f"La respuesta correcta es '{masked_word}'. ¡Sigue practicando!"
         }
-    
-    # Wrong answer
-    return {
-        "correct": False,
-        "score": 0.0,
-        "feedback": f"La respuesta correcta es '{masked_word}'. ¡Sigue practicando!"
-    }
 

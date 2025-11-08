@@ -16,6 +16,21 @@ const audioChunksRef = useRef<Blob[]>([])
 // Icon fallback state (currently using direct fallback in onError)
 // const [showIconFallback, setShowIconFallback] = useState(false)
 
+// Helper function to detect image type from base64
+function getImageDataUrl(base64: string): string {
+  // Try to decode and check if it's SVG (starts with <svg)
+  try {
+    const decoded = atob(base64.substring(0, 100)) // Decode first 100 chars
+    if (decoded.trim().startsWith('<svg') || decoded.trim().startsWith('<?xml')) {
+      return `data:image/svg+xml;base64,${base64}`
+    }
+  } catch (e) {
+    // If decoding fails, assume it's binary (PNG/JPG)
+  }
+  // Default to PNG for binary images
+  return `data:image/png;base64,${base64}`
+}
+
 
 useEffect(()=>{ accRef.current?.scrollTo({top:999999, behavior:'smooth'}) }, [messages, loading])
 
@@ -290,10 +305,10 @@ e.preventDefault()
 const data = JSON.parse(e.dataTransfer.getData('text/plain'))
 if(!activeQuiz || activeQuiz.type !== 'keyword_match') return
 
-// Only allow dropping English words onto Spanish words
+// Only allow dropping English words onto target language words
 if(data.type === 'english'){
 const englishWord = data.word
-// Check if this Spanish word already has a match
+// Check if this target language word already has a match
 const existingMatchIndex = activeQuiz.data.matches.findIndex((m: any) => m.spanish === targetSpanish)
 const matches = [...(activeQuiz.data.matches || [])]
 if(existingMatchIndex >= 0){
@@ -770,6 +785,7 @@ console.error('Validation error:', e)
 async function submitUnitCompletionAnswer(answer: string){
 if(!activeQuiz?.data || !activeQuiz.data.quizId) return
 const maskedWord = activeQuiz.data.masked_word
+const sentence = activeQuiz.data.sentence
 const quizId = activeQuiz.data.quizId
 try {
 const res = await fetch(`${API_BASE}/api/quiz/unit-completion/validate`, {
@@ -778,7 +794,8 @@ headers: {'Content-Type': 'application/json'},
 body: JSON.stringify({
 sessionId,
 userAnswer: answer,
-maskedWord
+maskedWord,
+sentence: sentence || ''
 })
 })
 if(!res.ok) throw new Error(`HTTP ${res.status}`)
@@ -832,7 +849,7 @@ return (
 />
 <span>Chat with Hootie</span>
 </div>
-<div className="tiny">Learn Spanish with personalized AI tutoring</div>
+<div className="tiny">Learn languages with personalized AI tutoring</div>
 </div>
 </div>
 
@@ -897,14 +914,14 @@ return (
           </div>
           {quiz.data.hint && !quizResult && (
             <div style={{fontSize: '12px', color: '#666', marginBottom: '8px', fontStyle: 'italic'}}>
-              💡 Pista: {quiz.data.hint}
+              💡 Hint: {quiz.data.hint}
             </div>
           )}
           {!quizResult ? (
             <div style={{display: 'flex', gap: '8px', alignItems: 'center'}}>
               <input
                 type="text"
-                placeholder="Escribe la palabra faltante..."
+                placeholder="Enter the missing word..."
                 onKeyDown={(e)=>{
                   if(e.key === 'Enter' && (e.target as HTMLInputElement).value.trim() && isActive){
                     submitUnitCompletionAnswer((e.target as HTMLInputElement).value.trim())
@@ -939,7 +956,7 @@ return (
                   opacity: isActive ? 1 : 0.5
                 }}
               >
-                Enviar
+                Send
               </button>
             </div>
           ) : (
@@ -954,7 +971,7 @@ return (
                 borderRadius: '12px',
                 border: quizResult.correct ? '2px solid #58CC02' : '2px solid #DC143C'
               }}>
-                {quizResult.correct ? '✓ ¡Correcto!' : '✗ Incorrecto'}
+                {quizResult.correct ? '✓ Correct!' : '✗ Incorrect'}
               </div>
               {quizResult.user_answer && (
                 <div style={{
@@ -1004,7 +1021,7 @@ return (
             {quiz.data.image_base64 && (
               <div style={{marginBottom: '16px', textAlign: 'center'}}>
                 <img 
-                  src={`data:image/png;base64,${quiz.data.image_base64}`}
+                  src={getImageDataUrl(quiz.data.image_base64)}
                   alt="Objeto para identificar"
                   style={{
                     maxWidth: '100%',
@@ -1039,7 +1056,7 @@ return (
               borderRadius: '12px',
               border: quiz.result.correct ? '2px solid #58CC02' : '2px solid #DC143C'
             }}>
-              {quiz.result.correct ? '✓ ¡Correcto!' : '✗ Incorrecto'}
+              {quiz.result.correct ? '✓ Correct!' : '✗ Incorrect'}
             </div>
             {quiz.result.user_answer && (
               <div style={{
@@ -1112,7 +1129,7 @@ return (
                 </div>
               </div>
               <div>
-                <div style={{fontSize: '14px', fontWeight: 600, marginBottom: '8px', color: '#666'}}>Español</div>
+                <div style={{fontSize: '14px', fontWeight: 600, marginBottom: '8px', color: '#666'}}>Target Language</div>
                 <div style={{display: 'flex', flexDirection: 'column', gap: '8px'}}>
                   {quiz.data.pairs?.map((pair: any, idx: number) => {
                     const match = quiz.data.matches?.find((m: any) => m.spanish === pair.spanish)
@@ -1230,7 +1247,7 @@ return (
                 fontSize: '16px',
                 fontWeight: 600
               }}>
-                Pregunta: {quiz.data.question}
+                Question: {quiz.data.question}
               </div>
             )}
             <div style={{
@@ -1320,7 +1337,7 @@ return (
                 fontSize: '16px',
                 fontWeight: 600
               }}>
-                Pregunta: {quiz.data.question}
+                Question: {quiz.data.question}
               </div>
             )}
             <div style={{
@@ -1333,7 +1350,7 @@ return (
               borderRadius: '12px',
               border: quiz.result.correct ? '2px solid #58CC02' : '2px solid #DC143C'
             }}>
-              {quiz.result.correct ? '✓ ¡Correcto!' : '✗ Incorrecto'}
+              {quiz.result.correct ? '✓ Correct!' : '✗ Incorrect'}
             </div>
             {quiz.result.user_answer && (
               <div style={{
@@ -1490,14 +1507,14 @@ boxShadow: '0 4px 12px rgba(0, 0, 0, 0.08)'
 </div>
 {activeQuiz.data.hint && (
 <div style={{fontSize: '12px', color: '#666', marginBottom: '8px', fontStyle: 'italic'}}>
-💡 Pista: {activeQuiz.data.hint}
+💡 Hint: {activeQuiz.data.hint}
 </div>
 )}
 {!activeQuiz.result ? (
 <div style={{display: 'flex', gap: '8px', alignItems: 'center'}}>
 <input
 type="text"
-placeholder="Escribe la palabra faltante..."
+placeholder="Enter the missing word..."
 onKeyDown={(e)=>{
 if(e.key === 'Enter' && (e.target as HTMLInputElement).value.trim()){
 submitUnitCompletionAnswer((e.target as HTMLInputElement).value.trim())
@@ -1535,7 +1552,7 @@ transition: 'all 0.2s ease',
 boxShadow: '0 4px 12px rgba(88, 204, 2, 0.3)'
 }}
 >
-Enviar
+Send
 </button>
 </div>
 ) : (
@@ -1545,7 +1562,7 @@ fontWeight: 600,
 color: activeQuiz.result.correct ? '#58CC02' : '#DC143C',
 marginBottom: '8px'
 }}>
-{activeQuiz.result.correct ? '✓ Correcto!' : '✗ Incorrecto'}
+{activeQuiz.result.correct ? '✓ Correct!' : '✗ Incorrect'}
 </div>
 <div style={{marginBottom: '8px'}}>{activeQuiz.result.feedback}</div>
 {!activeQuiz.result.correct && (
@@ -1600,7 +1617,7 @@ boxShadow: isUsed ? 'none' : '0 2px 4px rgba(0, 0, 0, 0.1)'
 </div>
 </div>
 <div>
-<div style={{fontSize: '14px', fontWeight: 600, marginBottom: '8px', color: '#666'}}>Español (Drop here)</div>
+<div style={{fontSize: '14px', fontWeight: 600, marginBottom: '8px', color: '#666'}}>Target Language (Drop here)</div>
 <div style={{display: 'flex', flexDirection: 'column', gap: '8px'}}>
 {activeQuiz.data.pairs.map((pair: any, idx: number) => {
 const match = activeQuiz.data.matches?.find((m: any) => m.spanish === pair.spanish)
@@ -1702,19 +1719,19 @@ boxShadow: '0 4px 12px rgba(0, 0, 0, 0.08)'
 }}>
 <div style={{fontWeight: 600, marginBottom: '12px'}}>🖼️ Detección de Imagen</div>
 {activeQuiz.data.image_base64 && (
-<div style={{marginBottom: '16px', textAlign: 'center'}}>
-<img 
-src={`data:image/png;base64,${activeQuiz.data.image_base64}`}
-alt="Objeto para identificar"
-style={{
-maxWidth: '100%',
-maxHeight: '300px',
-borderRadius: '8px',
-boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
-}}
-/>
-</div>
-)}
+              <div style={{marginBottom: '16px', textAlign: 'center'}}>
+                <img 
+                  src={getImageDataUrl(activeQuiz.data.image_base64)}
+                  alt="Objeto para identificar"
+                  style={{
+                    maxWidth: '100%',
+                    maxHeight: '300px',
+                    borderRadius: '8px',
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+                  }}
+                />
+              </div>
+            )}
 {activeQuiz.data.image_url && !activeQuiz.data.image_base64 && (
 <div style={{marginBottom: '16px', textAlign: 'center'}}>
 <img 
@@ -1730,13 +1747,13 @@ boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
 </div>
 )}
 <div style={{marginBottom: '12px', fontSize: '16px', textAlign: 'center'}}>
-¿Qué es esto? Escribe el nombre en español:
+What is this? Enter the name:
 </div>
 {!activeQuiz.result ? (
 <div style={{display: 'flex', gap: '8px', alignItems: 'center'}}>
 <input
 type="text"
-placeholder="Escribe la palabra..."
+placeholder="Enter the word..."
 onKeyDown={(e)=>{
 if(e.key === 'Enter' && (e.target as HTMLInputElement).value.trim()){
 submitImageDetectionAnswer((e.target as HTMLInputElement).value.trim())
@@ -1774,7 +1791,7 @@ transition: 'all 0.2s ease',
 boxShadow: '0 4px 12px rgba(88, 204, 2, 0.3)'
 }}
 >
-Enviar
+Send
 </button>
 </div>
 ) : (
@@ -1789,7 +1806,7 @@ background: activeQuiz.result.correct ? '#F0FDF4' : '#FEF2F2',
 borderRadius: '12px',
 border: activeQuiz.result.correct ? '2px solid #58CC02' : '2px solid #DC143C'
 }}>
-{activeQuiz.result.correct ? '✓ ¡Correcto!' : '✗ Incorrecto'}
+{activeQuiz.result.correct ? '✓ Correct!' : '✗ Incorrect'}
 </div>
 {activeQuiz.result.user_answer && (
 <div style={{
@@ -1889,12 +1906,12 @@ whiteSpace: 'pre-line'
 {activeQuiz.data.showQuestion && !activeQuiz.result && (
 <>
 <div style={{marginBottom: '12px', fontSize: '16px', fontWeight: 600}}>
-Pregunta: {activeQuiz.data.question}
+Question: {activeQuiz.data.question}
 </div>
 <div style={{display: 'flex', gap: '8px', alignItems: 'center'}}>
 <input
 type="text"
-placeholder="Escribe tu respuesta..."
+placeholder="Enter your answer..."
 onKeyDown={(e)=>{
 if(e.key === 'Enter' && (e.target as HTMLInputElement).value.trim()){
 submitPodcastAnswer((e.target as HTMLInputElement).value.trim())
@@ -1932,14 +1949,14 @@ transition: 'all 0.2s ease',
 boxShadow: '0 4px 12px rgba(88, 204, 2, 0.3)'
 }}
 >
-Enviar
+Send
 </button>
 </div>
 </>
 )}
 {!activeQuiz.data.showQuestion && !activeQuiz.result && (
 <div style={{textAlign: 'center', color: '#666', fontSize: '14px', fontStyle: 'italic'}}>
-Lee la conversación. La pregunta aparecerá en breve...
+Read the conversation. The question will appear shortly...
 </div>
 )}
 {activeQuiz.result && (
@@ -1949,7 +1966,7 @@ fontWeight: 600,
 color: activeQuiz.result.correct ? '#58CC02' : '#DC143C',
 marginBottom: '8px'
 }}>
-{activeQuiz.result.correct ? '✓ Correcto!' : '✗ Incorrecto'}
+{activeQuiz.result.correct ? '✓ Correct!' : '✗ Incorrect'}
 </div>
 <div style={{marginBottom: '8px'}}>{activeQuiz.result.feedback}</div>
 {!activeQuiz.result.correct && (
@@ -2138,7 +2155,7 @@ fontWeight: 600
 </div>
 <div style={{display: 'flex', flexDirection: 'column', gap: '8px'}}>
 <textarea
-placeholder="Escribe tu respuesta aquí..."
+placeholder="Enter your answer here..."
 onKeyDown={(e)=>{
 if(e.key === 'Enter' && e.ctrlKey && (e.target as HTMLTextAreaElement).value.trim()){
 submitReadingAnswer((e.target as HTMLTextAreaElement).value.trim())
@@ -2155,7 +2172,7 @@ resize: 'vertical'
 }}
 />
 <div style={{fontSize: '12px', color: '#666', marginTop: '-4px'}}>
-Ctrl + Enter para enviar
+Ctrl + Enter to send
 </div>
 <button
 onClick={()=>{
@@ -2175,14 +2192,14 @@ fontSize: '14px',
 fontWeight: 600
 }}
 >
-Enviar Respuesta
+Send Answer
 </button>
 </div>
 </>
 )}
 {!activeQuiz.data.showQuestion && !activeQuiz.result && (
 <div style={{textAlign: 'center', color: '#666', fontSize: '14px', fontStyle: 'italic', padding: '12px'}}>
-Lee el artículo cuidadosamente. La pregunta aparecerá en breve...
+Read the article carefully. The question will appear shortly...
 </div>
 )}
 {activeQuiz.result && (
@@ -2222,12 +2239,12 @@ color: '#666'
 )}
 </div>
 )}
-{loading && <div className="msg assistant typing">La profe está pensando…</div>}
+{loading && <div className="msg assistant typing">The teacher is thinking…</div>}
 </div>
 
 <div className="inputRow">
-<input value={draft} onChange={e=>setDraft(e.target.value)} placeholder="Escribe aquí… (Enter para enviar)" onKeyDown={e=>{ if(e.key==='Enter'){ send(draft) }}} />
-<button onClick={()=>send(draft)} disabled={loading}>Enviar</button>
+<input value={draft} onChange={e=>setDraft(e.target.value)} placeholder="Type here... (Enter to send)" onKeyDown={e=>{ if(e.key==='Enter'){ send(draft) }}} />
+<button onClick={()=>send(draft)} disabled={loading}>Send</button>
 </div>
 </div>
 </div>

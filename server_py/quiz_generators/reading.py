@@ -182,7 +182,7 @@ Generate the question now:"""
 
 async def validate_reading(session_id: str, user_answer: str, article_text: str, question: str) -> Dict[str, Any]:
     """
-    Validate reading comprehension answer using LLM.
+    Validate reading comprehension answer using LLM with semantic matching.
     Returns: {
         "score": float (1.0 to 10.0),
         "feedback": str,
@@ -191,7 +191,7 @@ async def validate_reading(session_id: str, user_answer: str, article_text: str,
     """
     prompt = f"""Evalúa la respuesta del estudiante a una pregunta de comprensión lectora.
 
-Artículo en español:
+Artículo:
 {article_text}
 
 Pregunta:
@@ -200,13 +200,15 @@ Pregunta:
 Respuesta del estudiante:
 {user_answer}
 
+IMPORTANTE: Evalúa la respuesta basándote en el SIGNIFICADO y CONTENIDO SEMÁNTICO, no en coincidencias exactas de palabras. Si la respuesta del estudiante expresa el mismo significado que la respuesta correcta, incluso usando palabras diferentes, debe recibir una puntuación alta.
+
 Evalúa la respuesta del estudiante:
 1. ¿La respuesta muestra comprensión del artículo?
-2. ¿La respuesta responde correctamente a la pregunta?
-3. ¿La respuesta está bien expresada en español?
+2. ¿La respuesta responde correctamente a la pregunta (semánticamente)?
+3. ¿La respuesta está bien expresada?
 
 Asigna una puntuación del 1 al 10:
-- 9-10: Respuesta excelente, demuestra comprensión completa y responde perfectamente
+- 9-10: Respuesta excelente, demuestra comprensión completa y responde perfectamente (semánticamente correcta)
 - 7-8: Respuesta buena, muestra buena comprensión con algunos detalles menores faltantes
 - 5-6: Respuesta aceptable, comprensión básica pero falta información importante
 - 3-4: Respuesta parcial, muestra comprensión limitada
@@ -215,13 +217,23 @@ Asigna una puntuación del 1 al 10:
 Formato tu respuesta EXACTLY así:
 
 SCORE: [número del 1 al 10]
-FEEDBACK: [comentario breve y alentador en español, 1-2 frases]
-EXPLANATION: [explicación de por qué esta puntuación, en español, 1-2 frases]
+FEEDBACK: [comentario breve y alentador, 1-2 frases]
+EXPLANATION: [explicación de por qué esta puntuación, 1-2 frases]
 
 Evalúa ahora:"""
 
+    # Get target language for feedback
+    from tools import get_profile
+    import json
+    profile_str = await get_profile.ainvoke({"session_id": session_id})
+    try:
+        profile = json.loads(profile_str)
+        target_language = profile.get("target_language", "Spanish")
+    except:
+        target_language = "Spanish"
+    
     messages = [
-        SystemMessage(content="Eres un profesor de español que evalúa respuestas de comprensión lectora. Sigue el formato exactamente."),
+        SystemMessage(content=f"Eres un profesor de {target_language} que evalúa respuestas de comprensión lectora. Evalúa basándote en el significado semántico, no en coincidencias exactas de palabras. Sigue el formato exactamente."),
         HumanMessage(content=prompt)
     ]
     

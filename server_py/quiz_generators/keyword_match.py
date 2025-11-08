@@ -43,6 +43,9 @@ async def generate_keyword_match(session_id: str) -> Dict[str, Any]:
     
     # Build prompt for LLM
     interests = profile.get("interests", "")
+    # Handle both string and list formats
+    if isinstance(interests, list):
+        interests = ", ".join(interests) if interests else ""
     # Use interests for TOPIC only, NEVER use name/age in content
     
     # Get target language
