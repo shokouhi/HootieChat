@@ -304,17 +304,18 @@ async def generate_audio_from_conversation(conversation: str, target_language: s
             "Modern Standard Arabic": "ar-XA",
             "Bengali": "bn-IN",
             "Russian": "ru-RU",
-            "Urdu": "ur-IN",
+            "Urdu": "ur-PK",  # ur-IN might not exist, use ur-PK (Pakistan)
             "English": "en-US"
         }
         lang_code = language_code_map.get(target_language, "en-US")  # Default to English if not mapped
         
-        # Voice name mapping - Arabic uses Standard voices, not Neural2
-        # Some languages don't support Neural2, so we need custom mappings
+        # Voice name mapping - Some languages don't support Neural2, use Standard or Wavenet instead
+        # Languages known to NOT support Neural2: Arabic variants, some Asian languages
         voice_name_map = {
+            # Arabic variants - use Standard voices
             "ar-XA": {
-                "HOST_A": "ar-XA-Standard-A",  # Female voice
-                "HOST_B": "ar-XA-Standard-B"   # Male voice
+                "HOST_A": "ar-XA-Standard-A",
+                "HOST_B": "ar-XA-Standard-B"
             },
             "ar-SA": {
                 "HOST_A": "ar-SA-Standard-A",
@@ -323,6 +324,26 @@ async def generate_audio_from_conversation(conversation: str, target_language: s
             "ar-EG": {
                 "HOST_A": "ar-EG-Standard-A",
                 "HOST_B": "ar-EG-Standard-B"
+            },
+            # Mandarin Chinese - use Wavenet (cmn-CN doesn't have Neural2-A/B format)
+            "cmn-CN": {
+                "HOST_A": "cmn-CN-Wavenet-A",
+                "HOST_B": "cmn-CN-Wavenet-B"
+            },
+            # Hindi - may need Standard or Wavenet
+            "hi-IN": {
+                "HOST_A": "hi-IN-Wavenet-A",
+                "HOST_B": "hi-IN-Wavenet-B"
+            },
+            # Bengali - may need Standard or Wavenet
+            "bn-IN": {
+                "HOST_A": "bn-IN-Standard-A",
+                "HOST_B": "bn-IN-Standard-B"
+            },
+            # Urdu - may need Standard or Wavenet
+            "ur-IN": {
+                "HOST_A": "ur-PK-Standard-A",  # Note: ur-IN might not exist, use ur-PK
+                "HOST_B": "ur-PK-Standard-B"
             }
         }
         
@@ -333,7 +354,7 @@ async def generate_audio_from_conversation(conversation: str, target_language: s
                 "HOST_B": {"language_code": lang_code, "name": voice_name_map[lang_code]["HOST_B"]}
             }
         else:
-            # Default: try Neural2 for other languages
+            # Default: try Neural2 for languages that support it (most European languages)
             VOICE_MAP = {
                 "HOST_A": {"language_code": lang_code, "name": f"{lang_code}-Neural2-A"},  # Female voice
                 "HOST_B": {"language_code": lang_code, "name": f"{lang_code}-Neural2-B"},  # Male voice
