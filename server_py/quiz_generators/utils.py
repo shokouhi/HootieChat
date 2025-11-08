@@ -56,6 +56,13 @@ def normalize_cefr_level(level_input: str) -> str:
     # Default to A1 if unclear
     return "A1"
 
+def get_target_language(profile: dict) -> str:
+    """
+    Get the target language from profile, defaulting to Spanish for backward compatibility.
+    Returns the language name (e.g., "Spanish", "French", "German").
+    """
+    return profile.get("target_language", "Spanish") if profile else "Spanish"
+
 def get_user_level(profile: dict, quiz_results: list) -> str:
     """
     Get the user's language level, prioritizing stated level from profile.
@@ -63,8 +70,8 @@ def get_user_level(profile: dict, quiz_results: list) -> str:
     If no stated level, estimate from quiz results.
     Returns normalized CEFR level (A1-A2-B1-B2-C1-C2).
     """
-    # First priority: User's stated level from profile
-    stated_level = profile.get("spanish_level")
+    # First priority: User's stated level from profile (support both language_level and spanish_level for backward compatibility)
+    stated_level = profile.get("language_level") or profile.get("spanish_level") if profile else None
     if stated_level:
         # Normalize the stated level
         normalized_stated = normalize_cefr_level(stated_level)

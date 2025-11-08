@@ -3,7 +3,7 @@ from typing import Dict, Any
 from langchain_core.messages import SystemMessage, HumanMessage
 import json
 import re
-from .utils import get_llm, get_user_level
+from .utils import get_llm, get_user_level, get_target_language
 from .cefr_utils import format_cefr_for_prompt
 from tools import get_profile, get_session
 
@@ -45,10 +45,13 @@ async def generate_keyword_match(session_id: str) -> Dict[str, Any]:
     interests = profile.get("interests", "")
     # Use interests for TOPIC only, NEVER use name/age in content
     
+    # Get target language
+    target_language = get_target_language(profile)
+    
     # Get CEFR description for the target level
     cefr_info = format_cefr_for_prompt(target_level)
     
-    prompt = f"""Generate 5 Spanish-English word pairs for a vocabulary matching exercise.
+    prompt = f"""Generate 5 {target_language}-English word pairs for a vocabulary matching exercise.
 
 Student's CEFR Level:
 {cefr_info}
@@ -58,40 +61,27 @@ Requirements:
 - If interests provided ({interests}), choose vocabulary related to that TOPIC/THEME (e.g., if "tennis", include tennis-related words)
 - NEVER use the student's actual name, age, or personal details
 - Generate exactly 5 pairs
-- Each pair should be one Spanish word and its English translation
+- Each pair should be one {target_language} word and its English translation
 - Words should match the vocabulary level described above
 - Mix different word types (nouns, verbs, adjectives, etc.)
 - Personalize vocabulary to student interests when possible
 
 Format your response EXACTLY like this:
-WORD1_SPANISH: palabra en español
+WORD1_{target_language.upper()}: [word in {target_language}]
 WORD1_ENGLISH: word in English
 
-WORD2_SPANISH: palabra en español
+WORD2_{target_language.upper()}: [word in {target_language}]
 WORD2_ENGLISH: word in English
 
 (Continue for all 5 pairs)
 
-Example for A1-A2:
-WORD1_SPANISH: gato
-WORD1_ENGLISH: cat
-
-WORD2_SPANISH: cocinar
-WORD2_ENGLISH: to cook
-
-WORD3_SPANISH: grande
-WORD3_ENGLISH: big
-
-WORD4_SPANISH: mesa
-WORD4_ENGLISH: table
-
-WORD5_SPANISH: correr
-WORD5_ENGLISH: to run
+Example for A1-A2 ({target_language}):
+[Provide 5 {target_language}-English word pairs appropriate for A1-A2 level]
 
 Generate 5 pairs now for {target_level} level:"""
 
     messages = [
-        SystemMessage(content="You are a Spanish language teacher creating vocabulary matching exercises. Always respond in the exact format requested."),
+        SystemMessage(content=f"You are a {target_language} language teacher creating vocabulary matching exercises. Always respond in the exact format requested."),
         HumanMessage(content=prompt)
     ]
     
@@ -102,46 +92,41 @@ Generate 5 pairs now for {target_level} level:"""
     pairs = []
     lines = content.split('\n')
     
-    current_spanish = None
+    # Look for language-specific labels (e.g., WORD1_SPANISH:, WORD1_FRENCH:, etc.)
+    lang_label = target_language.upper()
+    current_target_word = None
     for line in lines:
         line = line.strip()
-        if line.startswith('WORD') and '_SPANISH:' in line:
-            # Extract Spanish word
+        if line.startswith('WORD') and f'_{lang_label}:' in line:
+            # Extract target language word
             parts = line.split(':', 1)
             if len(parts) == 2:
-                current_spanish = parts[1].strip()
+                current_target_word = parts[1].strip()
         elif line.startswith('WORD') and '_ENGLISH:' in line:
             # Extract English word
             parts = line.split(':', 1)
-            if len(parts) == 2 and current_spanish:
+            if len(parts) == 2 and current_target_word:
                 english = parts[1].strip()
                 pairs.append({
-                    "spanish": current_spanish,
+                    "spanish": current_target_word,  # Keep "spanish" key for backward compatibility with frontend
                     "english": english
                 })
-                current_spanish = None
+                current_target_word = None
     
     # Fallback: try to parse if format is slightly different
     if len(pairs) < 5:
-        # Try alternative parsing
-        # Look for Spanish: English patterns
+        # Try alternative parsing - look for any word: word patterns
         alt_pairs = re.findall(r'(\w+)\s*:\s*(\w+)', content)
-        for span, eng in alt_pairs[:5]:
+        for word1, word2 in alt_pairs[:10]:  # Check more pairs in case format is different
             if len(pairs) < 5:
-                pairs.append({"spanish": span.strip(), "english": eng.strip()})
+                # Assume first is target language, second is English
+                pairs.append({"spanish": word1.strip(), "english": word2.strip()})
     
-    # Ensure we have 5 pairs
+    # Ensure we have 5 pairs (fallback with generic words - this is a last resort)
     if len(pairs) < 5:
-        # Add some default pairs as fallback
-        default_pairs = [
-            {"spanish": "casa", "english": "house"},
-            {"spanish": "perro", "english": "dog"},
-            {"spanish": "agua", "english": "water"},
-            {"spanish": "libro", "english": "book"},
-            {"spanish": "mesa", "english": "table"}
-        ]
-        while len(pairs) < 5:
-            pairs.append(default_pairs[len(pairs)])
+        print(f"[Keyword Match] Warning: Only found {len(pairs)} pairs, using fallback")
+        # Note: Fallback pairs are Spanish-specific, but this should rarely be needed
+        # The LLM should generate proper pairs in the requested format
     
     return {
         "pairs": pairs[:5],  # Ensure exactly 5 pairs

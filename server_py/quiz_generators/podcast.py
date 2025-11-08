@@ -9,7 +9,7 @@ import tempfile
 import subprocess
 import shutil
 import base64
-from .utils import get_llm, get_user_level
+from .utils import get_llm, get_user_level, get_target_language
 from .cefr_utils import format_cefr_for_prompt
 from tools import get_profile, get_session
 
@@ -63,10 +63,13 @@ async def generate_podcast(session_id: str) -> Dict[str, Any]:
         topics = ["deportes", "comida", "viajes", "música", "películas", "libros", "animales", "tecnología"]
         interests = random.choice(topics)
     
+    # Get target language
+    target_language = get_target_language(profile)
+    
     # Get CEFR description for the target level
     cefr_info = format_cefr_for_prompt(target_level)
     
-    prompt = f"""Generate a short Spanish conversation between two people (María (female) and Juan (male)) for a listening comprehension exercise.
+    prompt = f"""Generate a short {target_language} conversation between two people (María (female) and Juan (male)) for a listening comprehension exercise.
 
 Student's CEFR Level:
 {cefr_info}
@@ -77,12 +80,12 @@ Requirements:
 - NEVER use the student's actual name, age, or personal details in the conversation
 - Always use María (female) and Juan (male) as the speakers
 - Maximum 7 sentences total (distributed between both speakers)
-- Natural, conversational Spanish appropriate for the student's level
+- Natural, conversational {target_language} appropriate for the student's level
 - Vocabulary and sentence structure should match the level described above
 - Clear dialogue with speaker labels (María:, Juan:)
 - Output PLAIN TEXT ONLY - NO HTML, NO audio tags, NO markdown formatting
 
-After the conversation, generate ONE comprehension question based on the conversation content. The answer should ideally be just ONE WORD in Spanish.
+After the conversation, generate ONE comprehension question based on the conversation content. The answer should ideally be just ONE WORD in {target_language}.
 
 Format your response EXACTLY like this (PLAIN TEXT ONLY):
 
@@ -93,15 +96,15 @@ María: [next sentence]
 Juan: [response]
 [Continue until max 7 sentences total]
 
-QUESTION: [One question in Spanish about the conversation]
-ANSWER: [The correct answer, ideally one word]
+QUESTION: [One question in {target_language} about the conversation]
+ANSWER: [The correct answer, ideally one word in {target_language}]
 
 IMPORTANT: Do NOT include any HTML tags, audio elements, or markdown. Just plain text conversation.
 
 Generate now:"""
 
     messages = [
-        SystemMessage(content="You are a Spanish teacher creating listening comprehension exercises. Follow the format exactly."),
+        SystemMessage(content=f"You are a {target_language} teacher creating listening comprehension exercises. Follow the format exactly."),
         HumanMessage(content=prompt)
     ]
     

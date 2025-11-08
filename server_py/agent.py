@@ -206,21 +206,28 @@ Keep it warm and encouraging!"""
                 profile_parts.append(f"Age: {profile.get('age')}")
             if profile.get("interests"):
                 profile_parts.append(f"Interests: {profile.get('interests')}")
-            # Include Spanish level for internal use (not shown to user, but used to adjust difficulty)
-            stated_level = profile.get("spanish_level")
+            # Include target language and level for internal use
+            target_language = profile.get("target_language", "Spanish")  # Default to Spanish for backward compatibility
+            stated_level = profile.get("language_level") or profile.get("spanish_level")  # Support both for backward compatibility
+            if target_language:
+                profile_parts.append(f"Target Language: {target_language}")
             if stated_level:
-                profile_parts.append(f"Stated Spanish Level: {stated_level} (use this as base for content difficulty)")
+                profile_parts.append(f"Stated Language Level: {stated_level} (use this as base for content difficulty)")
             if profile_parts:
                 profile_info = f"\n\nUser Profile:\n{', '.join(profile_parts)}"
         
         language_note = ""
         if needs_help:
-            language_note = "\n\nNOTE: User asked for help in English. You may respond briefly in English to clarify, then continue in Spanish."
+            target_lang = profile.get("target_language", "Spanish") if profile else "Spanish"
+            language_note = f"\n\nNOTE: User asked for help in English. You may respond briefly in English to clarify, then continue in {target_lang}."
         
         # Determine instruction based on context
+        # Get target language from profile
+        target_language = profile.get("target_language", "Spanish") if profile else "Spanish"
+        
         if last_quiz_result:
             # User just completed a quiz - provide brief feedback ONLY (no transition - that happens separately)
-            instruction = f"""You are Hootie. The student just completed a quiz. Provide VERY BRIEF feedback (1 sentence max) in SPANISH:{profile_info}
+            instruction = f"""You are Hootie. The student just completed a quiz. Provide VERY BRIEF feedback (1 sentence max) in {target_language}:{profile_info}
 
 {quiz_feedback_section}
 {assessment_section}
@@ -228,7 +235,7 @@ Keep it warm and encouraging!"""
 IMPORTANT: This is ONLY the feedback message. Do NOT transition to the next quiz or say anything about what's coming next. Just give the feedback and stop."""
         elif selected_test_type:
             # New turn starting with a quiz
-            instruction = f"""You are Hootie. A new lesson turn is starting. NO GREETINGS - just briefly introduce the quiz naturally in SPANISH:{profile_info}
+            instruction = f"""You are Hootie. A new lesson turn is starting. NO GREETINGS - just briefly introduce the quiz naturally in {target_language}:{profile_info}
 
 {test_instruction}
 {assessment_section}
@@ -257,7 +264,7 @@ Assessment JSON (use internally to adjust difficulty):
 Plan JSON (use internally to guide content):
 {input_dict.get('plan_json', '{}')}
 
-Now reply briefly and naturally in SPANISH (unless help exception applies)."""
+Now reply briefly and naturally in {target_language} (unless help exception applies)."""
     
     messages = [
         SystemMessage(content=system_prompt),
@@ -393,11 +400,24 @@ def build_agent():
                         print(f"[Agent] 📝 Detected interest keyword: '{interest}'")
                         break
             
-            # Extract Spanish level
+            # Extract target language
+            language_patterns = [
+                r"(?:want to learn|learning|learn|language is|studying)\s+(spanish|french|german|italian|portuguese|chinese|japanese|korean|russian|arabic|dutch|polish|swedish|norwegian|danish|finnish|turkish|greek|hebrew|hindi|thai|vietnamese)",
+                r"(spanish|french|german|italian|portuguese|chinese|japanese|korean|russian|arabic|dutch|polish|swedish|norwegian|danish|finnish|turkish|greek|hebrew|hindi|thai|vietnamese)\s+(?:language|is what i want|is what i'm learning)"
+            ]
+            for pattern in language_patterns:
+                match = re.search(pattern, user_response, re.IGNORECASE)
+                if match:
+                    lang_str = match.group(1).capitalize()
+                    profile_updates["target_language"] = lang_str
+                    print(f"[Agent] 📝 Extracted target language: '{lang_str}'")
+                    break
+            
+            # Extract language level (for the target language)
             from quiz_generators.utils import normalize_cefr_level
             level_patterns = [
-                r"(?:level|spanish level|i'?m)\s*(?:is|am|are)?\s*(beginner|intermediate|advanced|a1|a2|b1|b2|c1|c2|basic|basico|intermedio|avanzado)",
-                r"(beginner|intermediate|advanced|a1|a2|b1|b2|c1|c2|basic|basico|intermedio|avanzado)\s*(?:level|spanish)?",
+                r"(?:level|language level|i'?m)\s*(?:is|am|are)?\s*(beginner|intermediate|advanced|a1|a2|b1|b2|c1|c2|basic|basico|intermedio|avanzado)",
+                r"(beginner|intermediate|advanced|a1|a2|b1|b2|c1|c2|basic|basico|intermedio|avanzado)\s*(?:level)?",
                 r"i'?m\s+(?:a|an)?\s*(beginner|intermediate|advanced)"
             ]
             for pattern in level_patterns:
@@ -405,8 +425,8 @@ def build_agent():
                 if match:
                     level_str = match.group(1)
                     normalized_level = normalize_cefr_level(level_str)
-                    profile_updates["spanish_level"] = normalized_level
-                    print(f"[Agent] 📝 Extracted Spanish level: {level_str} → {normalized_level}")
+                    profile_updates["language_level"] = normalized_level
+                    print(f"[Agent] 📝 Extracted language level: {level_str} → {normalized_level}")
                     break
             
             # Save profile updates if any found

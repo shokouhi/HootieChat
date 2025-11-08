@@ -7,7 +7,7 @@ import tempfile
 import os
 import subprocess
 import shutil
-from .utils import get_llm, get_user_level
+from .utils import get_llm, get_user_level, get_target_language
 from .cefr_utils import format_cefr_for_prompt
 from tools import get_profile, get_session
 
@@ -47,10 +47,13 @@ async def generate_pronunciation(session_id: str) -> Dict[str, Any]:
     # Get interests for personalization
     interests = profile.get("interests", "")
     
+    # Get target language
+    target_language = get_target_language(profile)
+    
     # Get CEFR description for the target level
     cefr_info = format_cefr_for_prompt(target_level)
     
-    prompt = f"""Generate a short Spanish sentence (3-8 words) for pronunciation practice.
+    prompt = f"""Generate a short {target_language} sentence (3-8 words) for pronunciation practice.
 
 Student's CEFR Level:
 {cefr_info}
@@ -65,15 +68,15 @@ Requirements:
 - Maximum 8 words, minimum 3 words
 
 Return ONLY the sentence, nothing else. No punctuation marks except period at the end if needed.
-Examples:
-- A1-A2: "Me gusta el café" or "El gato es pequeño"
-- B1-B2: "Me encanta viajar por España" or "Estudio medicina en la universidad"
-- C1-C2: "La investigación científica requiere paciencia" or "Aprecio la diversidad cultural"
+Examples ({target_language}):
+- A1-A2: [Provide {target_language} sentences appropriate for A1-A2 level]
+- B1-B2: [Provide {target_language} sentences appropriate for B1-B2 level]
+- C1-C2: [Provide {target_language} sentences appropriate for C1-C2 level]
 
 Generate the sentence now:"""
 
     messages = [
-        SystemMessage(content="You are a Spanish teacher creating pronunciation exercises. Respond with ONLY the Spanish sentence."),
+        SystemMessage(content=f"You are a {target_language} teacher creating pronunciation exercises. Respond with ONLY the {target_language} sentence."),
         HumanMessage(content=prompt)
     ]
     

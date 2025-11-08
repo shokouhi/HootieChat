@@ -3,7 +3,7 @@ from typing import Dict, Any
 from langchain_core.messages import SystemMessage, HumanMessage
 import json
 import re
-from .utils import get_llm, get_user_level
+from .utils import get_llm, get_user_level, get_target_language
 from .cefr_utils import format_cefr_for_prompt
 from tools import get_profile, get_session
 
@@ -47,10 +47,13 @@ async def generate_unit_completion(session_id: str) -> Dict[str, Any]:
     interests = profile.get("interests", "")
     # Use interests for TOPIC only, NEVER use name/age in content
     
+    # Get target language
+    target_language = get_target_language(profile)
+    
     # Get CEFR description for the target level
     cefr_info = format_cefr_for_prompt(target_level)
     
-    prompt = f"""Generate a Spanish sentence completion exercise for a student at the following CEFR level:
+    prompt = f"""Generate a {target_language} sentence completion exercise for a student at the following CEFR level:
 
 {cefr_info}
 
@@ -66,23 +69,19 @@ Requirements:
 
 Format:
 1. Write the sentences with [MASK] where the word should go
-2. On a new line, write "CORRECT_ANSWER: [the masked word in Spanish]"
-3. On another line, write "HINT: [a brief hint in Spanish, max 5 words]"
+2. On a new line, write "CORRECT_ANSWER: [the masked word in {target_language}]"
+3. On another line, write "HINT: [a brief hint in {target_language}, max 5 words]"
 
-Example for A1-A2:
-El gato está en el [MASK]. Me gusta mucho este lugar.
-CORRECT_ANSWER: jardín
-HINT: Un lugar al aire libre con plantas
+Example for A1-A2 ({target_language}):
+[Provide examples in {target_language} appropriate for A1-A2 level]
 
-Example for B1-B2:
-Ayer fui al museo y vi una exposición muy [MASK]. La disfruté mucho.
-CORRECT_ANSWER: interesante
-HINT: Algo que capta tu atención
+Example for B1-B2 ({target_language}):
+[Provide examples in {target_language} appropriate for B1-B2 level]
 
 Generate the exercise now:"""
 
     messages = [
-        SystemMessage(content="You are a Spanish language teacher creating sentence completion exercises. Always respond in the requested format."),
+        SystemMessage(content=f"You are a {target_language} language teacher creating sentence completion exercises. Always respond in the requested format."),
         HumanMessage(content=prompt)
     ]
     

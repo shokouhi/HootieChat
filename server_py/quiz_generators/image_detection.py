@@ -5,7 +5,7 @@ import json
 import re
 import base64
 import requests
-from .utils import get_llm, get_user_level
+from .utils import get_llm, get_user_level, get_target_language
 from .cefr_utils import format_cefr_for_prompt
 from tools import get_profile, get_session
 from config import CONFIG
@@ -44,11 +44,14 @@ async def generate_image_detection(session_id: str) -> Dict[str, Any]:
     }
     target_level = level_map.get(current_level, "A1-A2")
     
+    # Get target language
+    target_language = get_target_language(profile)
+    
     # Get CEFR description for the target level
     cefr_info = format_cefr_for_prompt(target_level)
     
-    # Step 1: LLM picks a Spanish word for an object
-    prompt1 = f"""Select a Spanish word for a common, recognizable object appropriate for a student at the following CEFR level:
+    # Step 1: LLM picks a word in target language for an object
+    prompt1 = f"""Select a {target_language} word for a common, recognizable object appropriate for a student at the following CEFR level:
 
 {cefr_info}
 
@@ -58,15 +61,15 @@ The word should be:
 - Appropriate vocabulary for the student's level as described above
 - Something that can be clearly illustrated in a simple cartoon style
 
-Return ONLY the Spanish word, nothing else.
-Example for A1-A2: gato, mesa, libro, coche
-Example for B1-B2: ordenador, bicicleta, restaurante
-Example for C1-C2: microscopio, biblioteca, laboratorio
+Return ONLY the {target_language} word, nothing else.
+Example for A1-A2 ({target_language}): [Provide {target_language} words appropriate for A1-A2 level]
+Example for B1-B2 ({target_language}): [Provide {target_language} words appropriate for B1-B2 level]
+Example for C1-C2 ({target_language}): [Provide {target_language} words appropriate for C1-C2 level]
 
 Return the word now:"""
 
     messages1 = [
-        SystemMessage(content="You are a Spanish teacher selecting vocabulary words. Respond with ONLY the Spanish word."),
+        SystemMessage(content=f"You are a {target_language} teacher selecting vocabulary words. Respond with ONLY the {target_language} word."),
         HumanMessage(content=prompt1)
     ]
     
@@ -74,7 +77,9 @@ Return the word now:"""
     object_word = response1.content.strip().lower()
     
     # Clean up the word (remove any extra text)
-    object_word = re.sub(r'[^a-záéíóúñü]', '', object_word)
+    # Note: This regex is Spanish-specific. For other languages, we may need to adjust
+    # For now, keep it flexible to handle most languages
+    object_word = re.sub(r'[^\w\s]', '', object_word).strip()
     
     # Step 2: Generate image using Google Imagen (via Gemini)
     # Make the prompt very specific to match Duolingo's cartoony character style

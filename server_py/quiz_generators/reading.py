@@ -5,7 +5,7 @@ import json
 import re
 import feedparser
 import random
-from .utils import get_llm, get_user_level
+from .utils import get_llm, get_user_level, get_target_language
 from .cefr_utils import format_cefr_for_prompt
 from tools import get_profile, get_session
 
@@ -77,11 +77,14 @@ async def generate_reading(session_id: str) -> Dict[str, Any]:
         original_summary = "Manchester City defeated their opponents 2-1 in an exciting Premier League match. The team played well and scored two goals in the second half."
         original_url = "https://www.bbc.com/sport/football"
     
+    # Get target language
+    target_language = get_target_language(profile)
+    
     # Get CEFR description for the target level
     cefr_info = format_cefr_for_prompt(target_level)
     
-    # Step 2: Translate article to Spanish at user's level
-    translation_prompt = f"""Translate the following English sports news article to Spanish, adapting it for a student at the following CEFR level:
+    # Step 2: Translate article to target language at user's level
+    translation_prompt = f"""Translate the following English sports news article to {target_language}, adapting it for a student at the following CEFR level:
 
 {cefr_info}
 
@@ -97,25 +100,25 @@ CRITICAL REQUIREMENTS FOR A1 LEVEL:
 - Avoid complex grammar (no subjunctive, no compound tenses unless essential)
 - Use common everyday words - if the article uses advanced vocabulary, replace with simpler equivalents
 - Break long sentences into multiple short sentences
-- Maximum 150 words in Spanish for A1, 200 words for A2, up to 400 for higher levels
+- Maximum 150 words in {target_language} for A1, 200 words for A2, up to 400 for higher levels
 
 Requirements:
-- Translate to natural but SIMPLE Spanish appropriate for the student's exact level
+- Translate to natural but SIMPLE {target_language} appropriate for the student's exact level
 - Match the vocabulary and sentence complexity EXACTLY to the level described above
-- For A1/A2: HEAVILY simplify - use only the most basic Spanish vocabulary and grammar
+- For A1/A2: HEAVILY simplify - use only the most basic {target_language} vocabulary and grammar
 - Simplify complex sentences (break them into shorter, simpler ones)
 - Maintain all key information and facts
 - Keep it engaging and readable at the student's exact level
 
 Format your response EXACTLY like this:
 
-TITLE: [Translated Spanish title]
-TEXT: [Translated Spanish article text]
+TITLE: [Translated {target_language} title]
+TEXT: [Translated {target_language} article text]
 
 Translate now:"""
 
     messages_translate = [
-        SystemMessage(content="You are a Spanish teacher translating articles for language learners. Follow the format exactly."),
+        SystemMessage(content=f"You are a {target_language} teacher translating articles for language learners. Follow the format exactly."),
         HumanMessage(content=translation_prompt)
     ]
     
@@ -135,7 +138,7 @@ Translate now:"""
     translated_text = re.sub(r'\s+', ' ', translated_text)
     
     # Step 3: Generate comprehension question
-    question_prompt = f"""Based on the following Spanish sports article, generate ONE reading comprehension question for a student at the following CEFR level:
+    question_prompt = f"""Based on the following {target_language} sports article, generate ONE reading comprehension question for a student at the following CEFR level:
 
 {cefr_info}
 
@@ -144,7 +147,7 @@ Article Title: {translated_title}
 Article Text: {translated_text}
 
 Requirements:
-- Question should be in Spanish
+- Question should be in {target_language}
 - The question complexity should match the student's language abilities as described above
 - Question should test understanding of key information from the article
 - Question should have a clear answer that can be found in the text
@@ -152,12 +155,12 @@ Requirements:
 
 Format your response EXACTLY like this:
 
-QUESTION: [Your question in Spanish]
+QUESTION: [Your question in {target_language}]
 
 Generate the question now:"""
 
     messages_question = [
-        SystemMessage(content="You are a Spanish teacher creating reading comprehension questions. Respond with ONLY the question in the specified format."),
+        SystemMessage(content=f"You are a {target_language} teacher creating reading comprehension questions. Respond with ONLY the question in the specified format."),
         HumanMessage(content=question_prompt)
     ]
     
