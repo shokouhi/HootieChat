@@ -1,24 +1,30 @@
 """Shared utilities for quiz generators."""
 import sys
 import os
+import json
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from config import CONFIG
 from langchain_openai import ChatOpenAI
 from langchain_google_genai import ChatGoogleGenerativeAI
 from .cefr_utils import format_cefr_for_prompt
 
-def get_llm():
-    """Initialize LLM based on provider configuration."""
+def get_llm(temperature: float = 0.8):
+    """
+    Initialize LLM based on provider configuration.
+    
+    Args:
+        temperature: Temperature for generation (default 0.8 for more variation in quiz content)
+    """
     if CONFIG.PROVIDER == "google":
         return ChatGoogleGenerativeAI(
             model=CONFIG.GOOGLE_MODEL,
-            temperature=0.7,
+            temperature=temperature,
             google_api_key=CONFIG.GOOGLE_API_KEY
         )
     else:
         return ChatOpenAI(
             model=CONFIG.OPENAI_MODEL,
-            temperature=0.7,
+            temperature=temperature,
             openai_api_key=CONFIG.OPENAI_API_KEY
         )
 
@@ -71,18 +77,18 @@ def get_target_language(profile: dict) -> str:
     
     return target_language
 
-def get_recent_quiz_content(quiz_results: list, test_type: str = None, last_n: int = 5) -> dict:
+def get_recent_quiz_content(quiz_results: list, test_type: str = None, last_n: int = 10) -> dict:
     """
     Extract recent quiz content to avoid repetition.
     Returns a dict with:
-    - 'words': list of recent words (for image_detection, keyword_match)
+    - 'words': list of recent words (for image_detection, keyword_match) - checks ALL quiz types
     - 'answers': list of recent correct answers (for unit_completion, podcast, reading)
     - 'sentences': list of recent sentences (for pronunciation, unit_completion)
     
     Args:
         quiz_results: List of quiz result dicts
-        test_type: Optional filter by test type
-        last_n: Number of recent quizzes to check (default 5)
+        test_type: Optional filter by test type (only used for answers/sentences, not words)
+        last_n: Number of recent quizzes to check (default 10, increased to catch more repetition)
     """
     recent_content = {
         "words": [],
@@ -93,19 +99,23 @@ def get_recent_quiz_content(quiz_results: list, test_type: str = None, last_n: i
     if not quiz_results:
         return recent_content
     
-    # Get recent quizzes (last N)
+    # Get recent quizzes (last N) - check ALL quiz types for words to avoid cross-type repetition
     recent_quizzes = quiz_results[-last_n:] if len(quiz_results) > last_n else quiz_results
     
-    # Filter by test_type if specified
+    # For words, check ALL recent quizzes (not just same type) to avoid "book" in image_detection AND keyword_match
+    # For answers/sentences, filter by test_type if specified
+    all_recent_for_words = recent_quizzes
+    recent_quizzes_filtered = recent_quizzes
     if test_type:
-        recent_quizzes = [q for q in recent_quizzes if q.get("test_type") == test_type]
+        recent_quizzes_filtered = [q for q in recent_quizzes if q.get("test_type") == test_type]
     
-    for quiz in recent_quizzes:
+    # First, extract words from ALL recent quizzes (to avoid cross-type repetition)
+    for quiz in all_recent_for_words:
         context = quiz.get("context", {})
         expected_answer = context.get("expected_answer", "")
         user_input = quiz.get("user_input", "")
         
-        # Extract words for image_detection and keyword_match
+        # Extract words for image_detection and keyword_match - check ALL quiz types
         if quiz.get("test_type") == "image_detection":
             if expected_answer:
                 # For image_detection, expected_answer is the word
@@ -140,6 +150,11 @@ def get_recent_quiz_content(quiz_results: list, test_type: str = None, last_n: i
                                                 recent_content["words"].append(word.strip().lower())
                     except:
                         pass
+        
+    # Then, extract answers and sentences from filtered quizzes (same test type)
+    for quiz in recent_quizzes_filtered:
+        context = quiz.get("context", {})
+        expected_answer = context.get("expected_answer", "")
         
         # Extract answers for unit_completion, podcast, reading
         if quiz.get("test_type") in ["unit_completion", "podcast", "reading"]:

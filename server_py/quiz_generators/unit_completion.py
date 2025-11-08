@@ -64,8 +64,8 @@ async def generate_unit_completion(session_id: str) -> Dict[str, Any]:
     # Build exclusion note for recent answers
     exclusion_note = ""
     if recent_answers:
-        recent_answers_str = ", ".join(recent_answers[:5])  # Show up to 5 recent answers
-        exclusion_note = f"\n\nCRITICAL: DO NOT use these recently used words as the masked answer: {recent_answers_str}\nYou MUST choose a DIFFERENT word that has NOT been used recently."
+        recent_answers_str = ", ".join(recent_answers[:10])  # Show up to 10 recent answers
+        exclusion_note = f"\n\nCRITICAL EXCLUSION LIST - DO NOT USE THESE WORDS: {recent_answers_str}\n\nYou MUST choose a COMPLETELY DIFFERENT word for the masked answer that:\n- Has NOT been used in ANY recent unit_completion quiz\n- Is NOT similar in meaning to any word in the list above\n- Is NEW, UNIQUE vocabulary that the student hasn't seen recently\n\nIf you see 'interesting' in the list, do NOT use 'interesting', 'fascinating', 'engaging', or similar words.\nChoose something COMPLETELY DIFFERENT."
     
     prompt = f"""Generate a {target_language} sentence completion exercise for a student at the following CEFR level:
 

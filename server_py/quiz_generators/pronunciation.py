@@ -34,6 +34,11 @@ async def generate_pronunciation(session_id: str) -> Dict[str, Any]:
     quiz_results = session.get("quiz_results", [])
     current_level = get_user_level(profile, quiz_results)
     
+    # Get recent quiz content to avoid repetition
+    from .utils import get_recent_quiz_content
+    recent_content = get_recent_quiz_content(quiz_results, test_type="pronunciation", last_n=10)
+    recent_sentences = recent_content.get("sentences", [])
+    
     level_map = {
         "A1": "A1-A2",
         "A2": "A2-B1",
@@ -57,6 +62,12 @@ async def generate_pronunciation(session_id: str) -> Dict[str, Any]:
     cefr_info = format_cefr_for_prompt(target_level)
     difficulty_guide = get_difficulty_guidelines(target_level)
     
+    # Build exclusion note for recent sentences
+    exclusion_note = ""
+    if recent_sentences:
+        recent_sentences_str = ", ".join(recent_sentences[:5])  # Show up to 5 recent sentences
+        exclusion_note = f"\n\nCRITICAL: DO NOT use these recently used sentences or similar content: {recent_sentences_str}\nYou MUST generate a COMPLETELY DIFFERENT sentence with DIFFERENT vocabulary and structure."
+    
     prompt = f"""Generate a short {target_language} sentence for pronunciation practice.
 
 Student's CEFR Level:
@@ -73,6 +84,9 @@ Requirements:
 - Length: 3-6 words for A1-A2, 5-10 words for B1-B2, up to 15 words for C1-C2
 - Use ONLY vocabulary within the range specified for this level
 - Good for pronunciation practice (mix of vowels, consonants, common sounds)
+{exclusion_note}
+
+IMPORTANT: Generate a sentence that is COMPLETELY DIFFERENT from what the student has practiced recently. Use NEW vocabulary and a DIFFERENT sentence structure.
 
 Return ONLY the sentence, nothing else. No punctuation marks except period at the end if needed.
 Examples ({target_language}):

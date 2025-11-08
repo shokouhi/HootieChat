@@ -30,8 +30,8 @@ async def generate_keyword_match(session_id: str) -> Dict[str, Any]:
     quiz_results = session.get("quiz_results", [])
     current_level = get_user_level(profile, quiz_results)
     
-    # Get recent quiz content to avoid repetition
-    recent_content = get_recent_quiz_content(quiz_results, test_type="keyword_match", last_n=5)
+    # Get recent quiz content to avoid repetition - check ALL quiz types for words
+    recent_content = get_recent_quiz_content(quiz_results, test_type=None, last_n=10)
     recent_words = recent_content.get("words", [])
     
     # Generate level slightly above (10% harder)
@@ -62,8 +62,8 @@ async def generate_keyword_match(session_id: str) -> Dict[str, Any]:
     # Build exclusion note for recent words
     exclusion_note = ""
     if recent_words:
-        recent_words_str = ", ".join(recent_words[:10])  # Show up to 10 recent words
-        exclusion_note = f"\n\nCRITICAL: DO NOT use these recently used {target_language} words: {recent_words_str}\nYou MUST choose DIFFERENT words that have NOT been used recently."
+        recent_words_str = ", ".join(recent_words[:15])  # Show up to 15 recent words
+        exclusion_note = f"\n\nCRITICAL EXCLUSION LIST - DO NOT USE THESE WORDS: {recent_words_str}\n\nYou MUST choose COMPLETELY DIFFERENT {target_language} words that:\n- Have NOT been used in ANY recent quiz (image detection, keyword match, etc.)\n- Are NOT similar in meaning to any word in the list above\n- Are NEW, UNIQUE vocabulary that the student hasn't seen recently\n\nIf you see 'book' in the list, do NOT use 'book', 'books', 'novel', 'textbook', or any book-related word.\nIf you see 'cat' in the list, do NOT use 'cat', 'kitten', 'feline', or any cat-related word.\nChoose COMPLETELY DIFFERENT words."
     
     prompt = f"""Generate 5 {target_language}-English word pairs for a vocabulary matching exercise.
 
@@ -85,6 +85,8 @@ Requirements:
 - Mix different word types (nouns, verbs, adjectives, etc.)
 - Personalize vocabulary to student interests when possible
 {exclusion_note}
+
+IMPORTANT: Choose words that are COMPLETELY DIFFERENT from what the student has seen recently. Think creatively and pick NEW, UNIQUE vocabulary.
 
 Format your response EXACTLY like this:
 WORD1_{target_language.upper()}: [word in {target_language}]

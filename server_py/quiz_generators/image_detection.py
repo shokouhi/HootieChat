@@ -34,8 +34,8 @@ async def generate_image_detection(session_id: str) -> Dict[str, Any]:
     quiz_results = session.get("quiz_results", [])
     current_level = get_user_level(profile, quiz_results)
     
-    # Get recent quiz content to avoid repetition
-    recent_content = get_recent_quiz_content(quiz_results, test_type="image_detection", last_n=5)
+    # Get recent quiz content to avoid repetition - check ALL quiz types for words
+    recent_content = get_recent_quiz_content(quiz_results, test_type=None, last_n=10)
     recent_words = recent_content.get("words", [])
     
     level_map = {
@@ -59,8 +59,8 @@ async def generate_image_detection(session_id: str) -> Dict[str, Any]:
     # Build exclusion list for recent words
     exclusion_note = ""
     if recent_words:
-        recent_words_str = ", ".join(recent_words[:10])  # Show up to 10 recent words
-        exclusion_note = f"\n\nCRITICAL: DO NOT use these recently used words: {recent_words_str}\nYou MUST choose a DIFFERENT word that has NOT been used recently."
+        recent_words_str = ", ".join(recent_words[:15])  # Show up to 15 recent words
+        exclusion_note = f"\n\nCRITICAL EXCLUSION LIST - DO NOT USE THESE WORDS: {recent_words_str}\n\nYou MUST choose a COMPLETELY DIFFERENT word that:\n- Has NOT been used in ANY recent quiz (image detection, keyword match, etc.)\n- Is NOT similar in meaning to any word in the list above\n- Is a NEW, UNIQUE object that the student hasn't seen recently\n\nIf you see 'book' in the list, do NOT use 'book', 'books', 'novel', 'textbook', or any book-related word.\nIf you see 'cat' in the list, do NOT use 'cat', 'kitten', 'feline', or any cat-related word.\nChoose something COMPLETELY DIFFERENT."
     
     prompt1 = f"""Select a {target_language} word for a common, recognizable object appropriate for a student at the following CEFR level:
 
@@ -78,6 +78,8 @@ The word MUST:
 - For A2-B1: Common objects with slightly more variety
 - For B2+: Can include more abstract or specialized objects
 {exclusion_note}
+
+IMPORTANT: Choose a word that is DIFFERENT from what the student has seen recently. Think creatively and pick something NEW and UNIQUE.
 
 Return ONLY the {target_language} word, nothing else.
 Example for A1-A2 ({target_language}): gato, mesa, libro, manzana
