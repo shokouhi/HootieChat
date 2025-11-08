@@ -873,22 +873,54 @@ def build_agent():
                         selected_test_type = random.choice(available_types)
                     print(f"[Agent] 📋 After feedback, sequential next quiz: {selected_test_type} (last was: {last_quiz_type}, completed: {list(completed_types)})")
                 
-                # Generate intro message for the next quiz
-                next_quiz_reply = await tutor_reply({
-                    "session_id": session_id,
-                    "last_user": "",  # Empty - we're auto-starting
-                    "test_type": selected_test_type,
-                    "last_quiz_result": None,
-                    "quiz_based_assessment": quiz_based_assessment,
-                    "missing_info": missing_info,
-                    "is_language_question": False,
-                    "correction_json": correction_json if isinstance(correction_json, str) else json.dumps(correction_json),
-                    "assessment_json": assessment_json if isinstance(assessment_json, str) else json.dumps(assessment_json),
-                    "plan_json": plan_json if isinstance(plan_json, str) else json.dumps(plan_json)
-                })
+                # Generate a simple template-based intro message for the next quiz
+                # Using templates instead of LLM to avoid unwanted conversational messages
+                quiz_intros = {
+                    "Spanish": {
+                        "image_detection": "Aquí tienes un ejercicio de imágenes.",
+                        "unit_completion": "Vamos a completar oraciones.",
+                        "keyword_match": "Vamos a practicar vocabulario.",
+                        "pronunciation": "Vamos a practicar pronunciación.",
+                        "podcast": "Escucha esta conversación.",
+                        "reading": "Lee este artículo."
+                    },
+                    "French": {
+                        "image_detection": "Voici un exercice d'images.",
+                        "unit_completion": "Complétons des phrases.",
+                        "keyword_match": "Pratiquons le vocabulaire.",
+                        "pronunciation": "Pratiquons la pronunciation.",
+                        "podcast": "Écoute cette conversation.",
+                        "reading": "Lis cet article."
+                    },
+                    "English": {
+                        "image_detection": "Here's an image exercise.",
+                        "unit_completion": "Let's complete some sentences.",
+                        "keyword_match": "Let's practice vocabulary.",
+                        "pronunciation": "Let's practice pronunciation.",
+                        "podcast": "Listen to this conversation.",
+                        "reading": "Read this article."
+                    },
+                    # Add default templates for other languages
+                    "default": {
+                        "image_detection": "🖼️",
+                        "unit_completion": "✏️",
+                        "keyword_match": "📝",
+                        "pronunciation": "🗣️",
+                        "podcast": "🎧",
+                        "reading": "📖"
+                    }
+                }
                 
-                # Combine feedback and next quiz intro - both sent together
-                # But feedback should be separate from quiz intro
+                # Get the target language
+                target_lang = current_profile.get("target_language", "English")
+                
+                # Get intro template (fallback to default if language not found)
+                lang_intros = quiz_intros.get(target_lang, quiz_intros["default"])
+                next_quiz_reply = lang_intros.get(selected_test_type, quiz_intros["default"][selected_test_type])
+                
+                print(f"[Agent] 📝 Generated template intro: '{next_quiz_reply}'")
+                
+                # Add to history
                 session["history"].append({"role": "assistant", "content": reply})
                 session["history"].append({"role": "assistant", "content": next_quiz_reply})
                 
