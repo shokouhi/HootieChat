@@ -1,0 +1,77 @@
+# Cloud Build configuration for automated deployment
+# Trigger: Push to main branch
+
+steps:
+  # Build backend Docker image
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '-t'
+      - 'gcr.io/$PROJECT_ID/hootie-backend:$SHORT_SHA'
+      - '-t'
+      - 'gcr.io/$PROJECT_ID/hootie-backend:latest'
+      - './server_py'
+    id: 'build-backend'
+
+  # Push backend image
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'push'
+      - 'gcr.io/$PROJECT_ID/hootie-backend:$SHORT_SHA'
+    id: 'push-backend'
+
+  # Deploy backend to Cloud Run
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: gcloud
+    args:
+      - 'run'
+      - 'deploy'
+      - 'hootie-backend'
+      - '--image'
+      - 'gcr.io/$PROJECT_ID/hootie-backend:$SHORT_SHA'
+      - '--region'
+      - 'us-central1'
+      - '--platform'
+      - 'managed'
+      - '--allow-unauthenticated'
+      - '--memory'
+      - '2Gi'
+      - '--cpu'
+      - '2'
+      - '--timeout'
+      - '300'
+      - '--max-instances'
+      - '10'
+    id: 'deploy-backend'
+
+  # Build frontend
+  - name: 'node:18'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        cd web
+        npm install
+        npm run build
+    id: 'build-frontend'
+
+  # Deploy frontend to Firebase
+  - name: 'gcr.io/$PROJECT_ID/firebase'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        cd web
+        firebase deploy --only hosting --non-interactive
+    id: 'deploy-frontend'
+
+images:
+  - 'gcr.io/$PROJECT_ID/hootie-backend:$SHORT_SHA'
+  - 'gcr.io/$PROJECT_ID/hootie-backend:latest'
+
+options:
+  machineType: 'E2_HIGHCPU_8'
+  logging: CLOUD_LOGGING_ONLY
+
+timeout: '1200s'
+

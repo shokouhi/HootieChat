@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 
-const API_BASE = 'http://localhost:3002'
+// Use environment variable for API URL, fallback to localhost for development
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3002'
 
 export default function App() {
 const sessionId = useMemo(()=> `sess-${Date.now()}`,[])

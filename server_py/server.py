@@ -6,12 +6,20 @@ from agent import build_agent
 from config import CONFIG
 import json
 import asyncio
+import os
 
 app = FastAPI()
 
+# Get allowed origins from environment (for production) or allow all (for development)
+allowed_origins = os.getenv("ALLOWED_ORIGINS", "*")
+if allowed_origins == "*":
+    origins = ["*"]
+else:
+    origins = [origin.strip() for origin in allowed_origins.split(",")]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

@@ -14,7 +14,7 @@ class Config:
     OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4")  # gpt-4, gpt-3.5-turbo, gpt-4-turbo
     GOOGLE_MODEL = os.getenv("GOOGLE_MODEL", "gemini-2.5-flash-lite")  # gemini-2.5-flash-lite (fastest), gemini-1.5-flash-latest, gemini-pro
     
-    PORT = int(os.getenv("PORT", "3002"))  # Changed to 3002 to avoid conflict
+    PORT = int(os.getenv("PORT", "8080"))  # Default to 8080 for Cloud Run, 3002 for local dev
     
     @classmethod
     def validate(cls):
