@@ -454,17 +454,42 @@ def build_agent():
                         print(f"[Agent] 📝 Detected interest keyword: '{interest}'")
                         break
             
-            # Extract target language
+            # Extract target language - Top 50 most spoken languages in the world
+            # Languages list includes: English, Mandarin, Hindi, Spanish, French, Arabic, Bengali, Portuguese, Russian, 
+            # Urdu, Indonesian, German, Japanese, Persian/Farsi, Korean, Thai, Vietnamese, Italian, Turkish, Polish,
+            # Ukrainian, Romanian, Dutch, Greek, Hebrew, Swahili, Tagalog, Tamil, and more
             language_patterns = [
-                r"(?:want to learn|learning|learn|language is|studying)\s+(spanish|french|german|italian|portuguese|chinese|japanese|korean|russian|arabic|dutch|polish|swedish|norwegian|danish|finnish|turkish|greek|hebrew|hindi|thai|vietnamese)",
-                r"(spanish|french|german|italian|portuguese|chinese|japanese|korean|russian|arabic|dutch|polish|swedish|norwegian|danish|finnish|turkish|greek|hebrew|hindi|thai|vietnamese)\s+(?:language|is what i want|is what i'm learning)"
+                r"(?:want to learn|learning|learn|language is|studying)\s+(english|mandarin|chinese|hindi|spanish|french|arabic|bengali|portuguese|russian|urdu|indonesian|german|japanese|persian|farsi|korean|thai|vietnamese|italian|turkish|polish|ukrainian|romanian|dutch|greek|hebrew|swahili|tagalog|tamil|cantonese|yue|wu|javanese|gujarati|bhojpuri|kannada|malayalam|sundanese|odia|oriya|burmese|igbo|sindhi|swedish|norwegian|danish|finnish|czech|hungarian|bulgarian|croatian|serbian|slovak|slovenian|estonian|latvian|lithuanian|maltese|albanian|macedonian|bosnian|montenegrin|georgian|armenian|azerbaijani|kazakh|uzbek|mongolian|nepali|sinhala|khmer|lao|myanmar|filipino|malay|indonesian|bahasa)",
+                r"(english|mandarin|chinese|hindi|spanish|french|arabic|bengali|portuguese|russian|urdu|indonesian|german|japanese|persian|farsi|korean|thai|vietnamese|italian|turkish|polish|ukrainian|romanian|dutch|greek|hebrew|swahili|tagalog|tamil|cantonese|yue|wu|javanese|gujarati|bhojpuri|kannada|malayalam|sundanese|odia|oriya|burmese|igbo|sindhi|swedish|norwegian|danish|finnish|czech|hungarian|bulgarian|croatian|serbian|slovak|slovenian|estonian|latvian|lithuanian|maltese|albanian|macedonian|bosnian|montenegrin|georgian|armenian|azerbaijani|kazakh|uzbek|mongolian|nepali|sinhala|khmer|lao|myanmar|filipino|malay|bahasa)\s+(?:language|is what i want|is what i'm learning)"
             ]
             for pattern in language_patterns:
                 match = re.search(pattern, user_response, re.IGNORECASE)
                 if match:
-                    lang_str = match.group(1).capitalize()
-                    profile_updates["target_language"] = lang_str
-                    print(f"[Agent] 📝 Extracted target language: '{lang_str}'")
+                    lang_str = match.group(1).lower()
+                    
+                    # Normalize language names to standard forms
+                    language_normalization = {
+                        "farsi": "Persian",
+                        "persian": "Persian",
+                        "mandarin": "Chinese",
+                        "chinese": "Chinese",
+                        "cantonese": "Cantonese",
+                        "yue": "Cantonese",
+                        "wu": "Wu Chinese",
+                        "bahasa": "Indonesian",
+                        "filipino": "Tagalog",
+                        "myanmar": "Burmese",
+                        "oriya": "Odia",
+                        "pidgin": "Nigerian Pidgin",
+                        "egyptian": "Arabic",
+                        "levantine": "Arabic",
+                        "north levantine": "Arabic"
+                    }
+                    
+                    # Check if we need to normalize
+                    normalized_lang = language_normalization.get(lang_str, lang_str.capitalize())
+                    profile_updates["target_language"] = normalized_lang
+                    print(f"[Agent] 📝 Extracted target language: '{lang_str}' → '{normalized_lang}'")
                     break
             
             # Extract language level (for the target language)

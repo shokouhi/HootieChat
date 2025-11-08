@@ -11,7 +11,7 @@ Your task:
    - Their name
    - Their age (or age range)
    - Their interests/hobbies
-   - What language they want to learn (e.g., Spanish, French, German, Italian, Portuguese, etc.)
+   - What language they want to learn (e.g., Spanish, French, German, Italian, Portuguese, Persian/Farsi, Chinese, Japanese, Korean, Arabic, Hindi, and many more - we support the top 50 most spoken languages)
    - Their current level in that language (beginner/intermediate/advanced, or A1/A2/B1/B2/C1/C2 if they know CEFR)
 
 IMPORTANT: When the user responds with their information, you MUST use the upsert_profile tool to save:
