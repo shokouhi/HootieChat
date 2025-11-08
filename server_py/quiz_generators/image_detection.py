@@ -76,30 +76,98 @@ Return the word now:"""
     # Clean up the word (remove any extra text)
     object_word = re.sub(r'[^a-záéíóúñü]', '', object_word)
     
-    # Step 2: Generate image using DALL-E
-    # Make the prompt very specific to ensure correct object is generated
-    image_prompt = f"A simple, friendly kindergarten cartoon illustration of a {object_word} (a single, clear object, not a scene or multiple objects). Style: simple children's book art, bright primary colors, very simple shapes with thick black outlines, minimalist design perfect for young children, white background, centered composition. The {object_word} should be the main and only focus of the image."
+    # Step 2: Generate image using Google Imagen (via Gemini)
+    # Make the prompt very specific to match Duolingo's cartoony character style
+    image_prompt = f"""A cute, friendly cartoon illustration of a {object_word} in the style of Duolingo characters. 
+    
+Style requirements:
+- Duolingo's signature cartoony character art style
+- Bright, cheerful colors (similar to Duolingo's green, blue, yellow palette)
+- Rounded, friendly shapes with soft edges
+- Simple, clean design with expressive features
+- White or light background
+- The {object_word} should be the single, main focus of the image
+- Playful and approachable, like Duolingo's mascot characters
+- No text, labels, or additional objects
+- Centered composition
+
+The image should look like it belongs in the Duolingo app - fun, educational, and visually appealing for language learners."""
     
     image_url = None
     image_base64 = None
     
     try:
-        from openai import OpenAI
-        client = OpenAI(api_key=CONFIG.OPENAI_API_KEY)
-        image_response = client.images.generate(
-            model="dall-e-3",
-            prompt=image_prompt,
-            size="1024x1024",
-            quality="standard",
-            n=1,
-        )
-        image_url = image_response.data[0].url
+        import google.generativeai as genai
         
-        # Download and convert to base64 for embedding
-        img_data = requests.get(image_url).content
-        image_base64 = base64.b64encode(img_data).decode('utf-8')
+        # Configure Google Generative AI
+        genai.configure(api_key=CONFIG.GOOGLE_API_KEY)
+        
+        # Use Imagen 3 for image generation
+        # The generate_images method is available in google-generativeai
+        try:
+            # Generate image using Imagen
+            result = genai.GenerativeModel('imagen-3.0-generate-001').generate_images(
+                prompt=image_prompt,
+                number_of_images=1,
+                aspect_ratio='1:1',
+                safety_filter_level='block_some',
+                person_generation='allow_all'
+            )
+            
+            # Extract base64 image data
+            if result and len(result.images) > 0:
+                image_data = result.images[0]
+                # If it's already base64, use it directly; otherwise convert
+                if isinstance(image_data, str):
+                    image_base64 = image_data
+                else:
+                    # Convert bytes to base64
+                    image_base64 = base64.b64encode(image_data).decode('utf-8')
+                    
+        except (AttributeError, TypeError) as api_error:
+            # Fallback: Try using REST API directly
+            print(f"[Image Gen] Direct API call failed, trying REST API...")
+            
+            # Use Google AI Studio REST API for image generation
+            api_url = "https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-001:generateImages"
+            
+            headers = {
+                "Content-Type": "application/json"
+            }
+            
+            payload = {
+                "prompt": image_prompt,
+                "numberOfImages": 1,
+                "aspectRatio": "1:1",
+                "safetyFilterLevel": "block_some",
+                "personGeneration": "allow_all"
+            }
+            
+            # Make request with API key in URL
+            img_response = requests.post(
+                f"{api_url}?key={CONFIG.GOOGLE_API_KEY}",
+                headers=headers,
+                json=payload
+            )
+            
+            if img_response.status_code == 200:
+                result = img_response.json()
+                if 'generatedImages' in result and len(result['generatedImages']) > 0:
+                    image_base64 = result['generatedImages'][0].get('bytesBase64Encoded')
+                elif 'images' in result and len(result['images']) > 0:
+                    image_base64 = result['images'][0].get('bytesBase64Encoded')
+            else:
+                raise Exception(f"Google API error: {img_response.status_code} - {img_response.text}")
+        
+    except ImportError:
+        print("[Image Gen] google-generativeai not installed. Installing...")
+        import subprocess
+        subprocess.check_call(["pip", "install", "google-generativeai"])
+        print("[Image Gen] Please restart the server and retry image generation")
     except Exception as e:
         print(f"[Image Gen Error] {e}")
+        import traceback
+        traceback.print_exc()
         # Fallback: return word without image, frontend can handle it
         pass
     

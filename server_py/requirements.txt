@@ -13,4 +13,6 @@ google-cloud-texttospeech==2.21.2
 openai==1.54.3
 requests==2.32.3
 feedparser==6.0.11
+google-generativeai==0.8.3
+Pillow==10.4.0
 
