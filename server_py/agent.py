@@ -848,6 +848,7 @@ def build_agent():
         
         # 2. Get correction
         print(f"[Agent] ✏️ Step 2: Getting correction...")
+        correct_chain = get_correct_chain()
         correction_result = await correct_chain.ainvoke({
             "last_user": user,
             "correction_policy": CORRECTION_POLICY
