@@ -13,7 +13,8 @@ const [shuffledEnglish, setShuffledEnglish] = useState<string[]>([])
 const [isRecording, setIsRecording] = useState(false)
 const mediaRecorderRef = useRef<MediaRecorder | null>(null)
 const audioChunksRef = useRef<Blob[]>([])
-const [showIconFallback, setShowIconFallback] = useState(false)
+// Icon fallback state (currently using direct fallback in onError)
+// const [showIconFallback, setShowIconFallback] = useState(false)
 
 
 useEffect(()=>{ accRef.current?.scrollTo({top:999999, behavior:'smooth'}) }, [messages, loading])
@@ -58,7 +59,6 @@ throw new Error('No response body')
 const reader = res.body.getReader()
 let assistant = ''
 let assistantMsgAdded = false
-let testType: string | null = null
 while(true){
 const { value, done } = await reader.read()
 if(done) break
@@ -71,7 +71,6 @@ if(payload.error){
 throw new Error(payload.error)
 }
 if(payload.test_type){
-testType = payload.test_type
 console.log('[Frontend] ⚡ Test type received:', payload.test_type)
 waitingForQuizCompletion.current = true
 // Add quiz placeholder to messages immediately
