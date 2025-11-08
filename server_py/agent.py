@@ -900,7 +900,63 @@ def build_agent():
                         "podcast": "Listen to this conversation.",
                         "reading": "Read this article."
                     },
-                    # Add default templates for other languages
+                    "Mandarin Chinese": {
+                        "image_detection": "这是一个图像练习。",
+                        "unit_completion": "我们来完成句子。",
+                        "keyword_match": "我们来练习词汇。",
+                        "pronunciation": "我们来练习发音。",
+                        "podcast": "听这段对话。",
+                        "reading": "读这篇文章。"
+                    },
+                    "Hindi": {
+                        "image_detection": "यह एक चित्र अभ्यास है।",
+                        "unit_completion": "आइए वाक्य पूरे करें।",
+                        "keyword_match": "आइए शब्दावली का अभ्यास करें।",
+                        "pronunciation": "आइए उच्चारण का अभ्यास करें।",
+                        "podcast": "इस बातचीत को सुनें।",
+                        "reading": "यह लेख पढ़ें।"
+                    },
+                    "Modern Standard Arabic": {
+                        "image_detection": "إليك تمرين صور.",
+                        "unit_completion": "لنكمل الجمل.",
+                        "keyword_match": "لنتدرب على المفردات.",
+                        "pronunciation": "لنتدرب على النطق.",
+                        "podcast": "استمع إلى هذه المحادثة.",
+                        "reading": "اقرأ هذا المقال."
+                    },
+                    "Bengali": {
+                        "image_detection": "এখানে একটি ছবির অনুশীলন।",
+                        "unit_completion": "আসুন বাক্য সম্পূর্ণ করি।",
+                        "keyword_match": "আসুন শব্দভাণ্ডার অনুশীলন করি।",
+                        "pronunciation": "আসুন উচ্চারণ অনুশীলন করি।",
+                        "podcast": "এই কথোপকথন শুনুন।",
+                        "reading": "এই নিবন্ধটি পড়ুন।"
+                    },
+                    "Portuguese": {
+                        "image_detection": "Aqui está um exercício de imagens.",
+                        "unit_completion": "Vamos completar frases.",
+                        "keyword_match": "Vamos praticar vocabulário.",
+                        "pronunciation": "Vamos praticar pronúncia.",
+                        "podcast": "Ouça esta conversa.",
+                        "reading": "Leia este artigo."
+                    },
+                    "Russian": {
+                        "image_detection": "Вот упражнение с изображениями.",
+                        "unit_completion": "Давайте дополним предложения.",
+                        "keyword_match": "Давайте попрактикуем лексику.",
+                        "pronunciation": "Давайте попрактикуем произношение.",
+                        "podcast": "Послушайте этот разговор.",
+                        "reading": "Прочитайте эту статью."
+                    },
+                    "Urdu": {
+                        "image_detection": "یہ ایک تصویری مشق ہے۔",
+                        "unit_completion": "آئیں جملے مکمل کریں۔",
+                        "keyword_match": "آئیں الفاظ کی مشق کریں۔",
+                        "pronunciation": "آئیں تلفظ کی مشق کریں۔",
+                        "podcast": "یہ بات چیت سنیں۔",
+                        "reading": "یہ مضمون پڑھیں۔"
+                    },
+                    # Default templates for unsupported languages (emojis as fallback)
                     "default": {
                         "image_detection": "🖼️",
                         "unit_completion": "✏️",
