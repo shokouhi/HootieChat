@@ -16,7 +16,7 @@ async def generate_image_detection(session_id: str) -> Dict[str, Any]:
     """
     Generate an image detection quiz.
     Returns: {
-        "object_word": "spanish word",
+        "object_word": "word in target language",
         "image_url": "data:image/png;base64,..." or URL,
         "difficulty": "A1|A2|B1|B2|C1|C2"
     }
@@ -95,8 +95,7 @@ Return the word now:"""
     object_word = response1.content.strip().lower()
     
     # Clean up the word (remove any extra text)
-    # Note: This regex is Spanish-specific. For other languages, we may need to adjust
-    # For now, keep it flexible to handle most languages
+    # Works for most languages with basic character filtering
     object_word = re.sub(r'[^\w\s]', '', object_word).strip()
     
     # Step 2: Translate the word to English for the image generation prompt
@@ -362,9 +361,9 @@ async def validate_image_detection(session_id: str, user_answer: str, correct_wo
     profile_str = await get_profile.ainvoke({"session_id": session_id})
     try:
         profile = json.loads(profile_str)
-        target_language = profile.get("target_language", "Spanish")
+        target_language = profile.get("target_language", "English")
     except:
-        target_language = "Spanish"
+        target_language = "English"
     
     user_answer_clean = user_answer.strip()
     correct_word_clean = correct_word.strip()
@@ -374,36 +373,36 @@ async def validate_image_detection(session_id: str, user_answer: str, correct_wo
         return {
             "correct": True,
             "score": 1.0,
-            "feedback": "¡Correcto! Bien hecho.",
+            "feedback": "Correct! Well done.",
             "user_answer": user_answer
         }
     
     # Use LLM for semantic matching
     llm = get_llm()
-    prompt = f"""Evalúa si la palabra del estudiante es semánticamente equivalente a la palabra correcta.
+    prompt = f"""Evaluate if the student's word is semantically equivalent to the correct word.
 
-Palabra correcta: "{correct_word_clean}"
-Palabra del estudiante: "{user_answer_clean}"
+Correct word: "{correct_word_clean}"
+Student's word: "{user_answer_clean}"
 
-IMPORTANTE: No busques coincidencias exactas. Evalúa si ambas palabras se refieren al mismo objeto, concepto o cosa, incluso si son sinónimos o variaciones.
+IMPORTANT: Do not look for exact matches. Evaluate if both words refer to the same object, concept, or thing, even if they are synonyms or variations.
 
-Ejemplos de palabras semánticamente equivalentes:
-- "casa" y "hogar" (ambas se refieren a una vivienda)
-- "auto" y "coche" (ambas se refieren a un vehículo)
-- "perro" y "can" (ambas se refieren al mismo animal)
-- "feliz" y "contento" (ambas expresan el mismo estado emocional)
+Examples of semantically equivalent words:
+- "house" and "home" (both refer to a dwelling)
+- "car" and "automobile" (both refer to a vehicle)
+- "dog" and "canine" (both refer to the same animal)
+- "happy" and "content" (both express the same emotional state)
 
-Responde SOLO con JSON en este formato exacto:
+Respond ONLY with JSON in this exact format:
 {{
     "semantically_equivalent": true/false,
     "score": 0.0-1.0,
-    "reason": "breve explicación en español"
+    "reason": "brief explanation in English"
 }}
 
-Si son semánticamente equivalentes, score debe ser >= 0.8. Si no lo son, score debe ser < 0.8."""
+If they are semantically equivalent, score must be >= 0.8. If not, score must be < 0.8."""
 
     messages = [
-        SystemMessage(content=f"Eres un evaluador de vocabulario en {target_language}. Evalúa la equivalencia semántica, no coincidencias exactas de palabras."),
+        SystemMessage(content=f"You are a vocabulary evaluator for {target_language}. Evaluate semantic equivalence, not exact word matches."),
         HumanMessage(content=prompt)
     ]
     
@@ -431,14 +430,14 @@ Si son semánticamente equivalentes, score debe ser >= 0.8. Si no lo son, score 
             return {
                 "correct": True,
                 "score": score,
-                "feedback": "¡Correcto! Bien hecho." if score >= 0.95 else f"¡Bien! {reason if reason else 'Respuesta aceptada.'}",
+                "feedback": "Correct! Well done." if score >= 0.95 else f"Good! {reason if reason else 'Answer accepted.'}",
                 "user_answer": user_answer
             }
         else:
             return {
                 "correct": False,
                 "score": score,
-                "feedback": f"La respuesta correcta es '{correct_word}'. {reason if reason else '¡Sigue practicando!'}",
+                "feedback": f"The correct answer is '{correct_word}'. {reason if reason else 'Keep practicing!'}",
                 "correct_answer": correct_word,
                 "user_answer": user_answer
             }
@@ -448,7 +447,7 @@ Si son semánticamente equivalentes, score debe ser >= 0.8. Si no lo son, score 
         return {
             "correct": False,
             "score": 0.0,
-            "feedback": f"La respuesta correcta es '{correct_word}'. ¡Sigue practicando!",
+            "feedback": f"The correct answer is '{correct_word}'. Keep practicing!",
             "correct_answer": correct_word,
             "user_answer": user_answer
         }

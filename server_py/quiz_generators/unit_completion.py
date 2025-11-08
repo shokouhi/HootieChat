@@ -158,9 +158,9 @@ async def validate_unit_completion(session_id: str, user_answer: str, masked_wor
     profile_str = await get_profile.ainvoke({"session_id": session_id})
     try:
         profile = json.loads(profile_str)
-        target_language = profile.get("target_language", "Spanish")
+        target_language = profile.get("target_language", "English")
     except:
-        target_language = "Spanish"
+        target_language = "English"
     
     user_answer_clean = user_answer.strip()
     correct_answer_clean = masked_word.strip()
@@ -171,7 +171,7 @@ async def validate_unit_completion(session_id: str, user_answer: str, masked_wor
         return {
             "correct": True,
             "score": 1.0,
-            "feedback": "¡Correcto! Bien hecho."
+            "feedback": "Correct! Well done."
         }
     
     # Replace [MASK] or [mask] with the user's answer to create the test sentence
@@ -179,42 +179,42 @@ async def validate_unit_completion(session_id: str, user_answer: str, masked_wor
     
     # Use LLM to check if the answer fits grammatically and contextually
     llm = get_llm()
-    prompt = f"""Evalúa si la respuesta del estudiante encaja correctamente en la oración.
+    prompt = f"""Evaluate if the student's answer fits correctly in the sentence.
 
-Oración original con [MASK]:
+Original sentence with [MASK]:
 {sentence_clean}
 
-Oración con la respuesta del estudiante:
+Sentence with the student's answer:
 {test_sentence}
 
-Respuesta del estudiante: "{user_answer_clean}"
-Respuesta correcta esperada: "{correct_answer_clean}"
+Student's answer: "{user_answer_clean}"
+Expected correct answer: "{correct_answer_clean}"
 
-IMPORTANTE: 
-- NO busques que la respuesta sea semánticamente equivalente a la respuesta correcta
-- Evalúa si la respuesta del estudiante:
-  1. Encaja GRAMÁTICAMENTE en la oración (concordancia, género, número, etc.)
-  2. Tiene SENTIDO CONTEXTUAL en la oración (no es absurda o incoherente)
+IMPORTANT: 
+- Do NOT look for the answer to be semantically equivalent to the correct answer
+- Evaluate if the student's answer:
+  1. Fits GRAMMATICALLY in the sentence (agreement, gender, number, etc.)
+  2. Makes CONTEXTUAL SENSE in the sentence (not absurd or incoherent)
 
-Ejemplos:
-- "Me gusta jugar al tenis. Es un deporte muy [MASK]"
-  - "interesante" ✓ (gramaticalmente correcto, tiene sentido)
-  - "divertido" ✓ (gramaticalmente correcto, tiene sentido, aunque sea diferente de "interesante")
-  - "gato" ✗ (no tiene sentido contextual - "un deporte muy gato" es absurdo)
-  - "casa" ✗ (no tiene sentido contextual - "un deporte muy casa" es absurdo)
+Examples:
+- "I like to play tennis. It is a very [MASK] sport"
+  - "interesting" ✓ (grammatically correct, makes sense)
+  - "fun" ✓ (grammatically correct, makes sense, even though different from "interesting")
+  - "cat" ✗ (doesn't make contextual sense - "a very cat sport" is absurd)
+  - "house" ✗ (doesn't make contextual sense - "a very house sport" is absurd)
 
-Responde SOLO con JSON en este formato exacto:
+Respond ONLY with JSON in this exact format:
 {{
     "grammatically_correct": true/false,
     "contextually_makes_sense": true/false,
     "score": 0.0-1.0,
-    "reason": "breve explicación en {target_language}"
+    "reason": "brief explanation in English"
 }}
 
-Si es gramaticalmente correcto Y tiene sentido contextual, score debe ser >= 0.8. Si no, score debe ser < 0.8."""
+If it is grammatically correct AND makes contextual sense, score must be >= 0.8. If not, score must be < 0.8."""
 
     messages = [
-        SystemMessage(content=f"Eres un evaluador de ejercicios de completar oraciones en {target_language}. Evalúa si la respuesta encaja gramaticalmente y contextualmente, no si es semánticamente equivalente a la respuesta esperada."),
+        SystemMessage(content=f"You are an evaluator of sentence completion exercises in {target_language}. Evaluate if the answer fits grammatically and contextually, not if it is semantically equivalent to the expected answer."),
         HumanMessage(content=prompt)
     ]
     
@@ -244,13 +244,13 @@ Si es gramaticalmente correcto Y tiene sentido contextual, score debe ser >= 0.8
             return {
                 "correct": True,
                 "score": score,
-                "feedback": "¡Correcto! Bien hecho." if score >= 0.95 else f"¡Bien! {reason if reason else 'Respuesta aceptada.'}"
+                "feedback": "Correct! Well done." if score >= 0.95 else f"Good! {reason if reason else 'Answer accepted.'}"
             }
         else:
             return {
                 "correct": False,
                 "score": score,
-                "feedback": f"La respuesta correcta es '{masked_word}'. {reason if reason else '¡Sigue practicando!'}"
+                "feedback": f"The correct answer is '{masked_word}'. {reason if reason else 'Keep practicing!'}"
             }
     except Exception as e:
         print(f"[Quiz Val] Error in validation: {e}")
@@ -261,11 +261,11 @@ Si es gramaticalmente correcto Y tiene sentido contextual, score debe ser >= 0.8
             return {
                 "correct": False,
                 "score": 0.5,
-                "feedback": f"Cerca, pero no exacto. La respuesta correcta es '{masked_word}'."
+                "feedback": f"Close, but not exact. The correct answer is '{masked_word}'."
             }
         return {
             "correct": False,
             "score": 0.0,
-            "feedback": f"La respuesta correcta es '{masked_word}'. ¡Sigue practicando!"
+            "feedback": f"The correct answer is '{masked_word}'. Keep practicing!"
         }
 

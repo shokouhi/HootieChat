@@ -63,7 +63,8 @@ async def generate_podcast(session_id: str) -> Dict[str, Any]:
     if isinstance(interests, list):
         interests = ", ".join(interests) if interests else ""
     if not interests or (isinstance(interests, str) and interests.strip() == ""):
-        topics = ["deportes", "comida", "viajes", "música", "películas", "libros", "animales", "tecnología"]
+        # Use English topic names - they'll be adapted to target language by the LLM
+        topics = ["sports", "food", "travel", "music", "movies", "books", "animals", "technology"]
         interests = random.choice(topics)
     
     # Get target language
@@ -73,7 +74,7 @@ async def generate_podcast(session_id: str) -> Dict[str, Any]:
     cefr_info = format_cefr_for_prompt(target_level)
     difficulty_guide = get_difficulty_guidelines(target_level)
     
-    prompt = f"""Generate a short {target_language} conversation between two people (María (female) and Juan (male)) for a listening comprehension exercise.
+    prompt = f"""Generate a short {target_language} conversation between two people (use appropriate {target_language} names, one female and one male) for a listening comprehension exercise.
 
 Student's CEFR Level:
 {cefr_info}
@@ -85,12 +86,12 @@ Requirements:
 - STRICTLY MATCH the vocabulary, grammar, and sentence complexity to the guidelines above
 - Topic/theme: {interests} (use this topic generally, e.g., if "tennis", write about tennis in general)
 - NEVER use the student's actual name, age, or personal details in the conversation
-- Always use María (female) and Juan (male) as the speakers
+- Use two speakers with appropriate {target_language} names (one female, one male)
 - Maximum 5 sentences total for A1-A2, 7 sentences for B1+
 - Natural, conversational {target_language} that EXACTLY matches the student's level
 - Each sentence MUST follow the sentence structure limits in the guidelines (e.g., max 8-10 words for A1)
 - Use ONLY vocabulary within the range specified for this level
-- Clear dialogue with speaker labels (María:, Juan:)
+- Clear dialogue with speaker labels (Speaker1:, Speaker2:)
 - Output PLAIN TEXT ONLY - NO HTML, NO audio tags, NO markdown formatting
 
 After the conversation, generate ONE comprehension question based on the conversation content. The answer should ideally be just ONE WORD in {target_language}.
@@ -98,10 +99,10 @@ After the conversation, generate ONE comprehension question based on the convers
 Format your response EXACTLY like this (PLAIN TEXT ONLY):
 
 CONVERSATION:
-María: [first sentence]
-Juan: [response]
-María: [next sentence]
-Juan: [response]
+Speaker1: [first sentence]
+Speaker2: [response]
+Speaker1: [next sentence]
+Speaker2: [response]
 [Continue until max 7 sentences total]
 
 QUESTION: [One question in {target_language} about the conversation]
@@ -216,18 +217,9 @@ Generate now:"""
             if words_after_answer:
                 answer = words_after_answer[0]
     
-    # Final validation - if still missing, provide defaults
-    if not conversation:
-        conversation = "María: Hola. ¿Cómo estás?\nJuan: Bien, gracias. ¿Y tú?"
-        print("[Podcast Gen] Using fallback conversation")
-    
-    if not question:
-        question = "¿Qué dijo Juan?"
-        print("[Podcast Gen] Using fallback question")
-    
-    if not answer:
-        answer = "bien"
-        print("[Podcast Gen] Using fallback answer")
+    # Final validation - if still missing, we cannot proceed (no language-specific fallbacks)
+    if not conversation or not question or not answer:
+        raise ValueError(f"[Podcast Gen] Failed to generate podcast quiz - missing required fields. Conversation: {bool(conversation)}, Question: {bool(question)}, Answer: {bool(answer)}")
     
     # Generate audio from conversation using Google TTS
     audio_url = None
@@ -268,21 +260,46 @@ async def generate_audio_from_conversation(conversation: str, target_language: s
             print("[Podcast Gen] GOOGLE_APPLICATION_CREDENTIALS not set, skipping audio generation")
             return {"audio_url": None, "audio_base64": None}
         
-        # Convert conversation format: "María: text" -> "HOST_A: text", "Juan: text" -> "HOST_B: text"
-        script_text = conversation.replace("María:", "HOST_A:").replace("Juan:", "HOST_B:")
+        # Convert conversation format: Extract speaker names and map to HOST_A/HOST_B
+        # Pattern: "SpeakerName: text" -> "HOST_A: text" or "HOST_B: text"
+        lines = conversation.split('\n')
+        script_lines = []
+        speaker_map = {}
+        speaker_count = 0
+        
+        for line in lines:
+            if ':' in line:
+                speaker_name = line.split(':', 1)[0].strip()
+                if speaker_name not in speaker_map:
+                    if speaker_count == 0:
+                        speaker_map[speaker_name] = "HOST_A"
+                        speaker_count = 1
+                    else:
+                        speaker_map[speaker_name] = "HOST_B"
+                # Replace speaker name with mapped host
+                text = line.split(':', 1)[1] if ':' in line else line
+                script_lines.append(f"{speaker_map[speaker_name]}:{text}")
+            else:
+                script_lines.append(line)
+        
+        script_text = '\n'.join(script_lines)
         
         # Map speakers to distinct voices based on target language
-        # Note: Currently supports Spanish voices. For other languages, voice codes need to be mapped
-        # TODO: Add language-to-voice-code mapping for other languages
         language_code_map = {
             "Spanish": "es-ES",
             "French": "fr-FR",
             "German": "de-DE",
             "Italian": "it-IT",
             "Portuguese": "pt-PT",
-            # Add more languages as needed
+            "Mandarin Chinese": "cmn-CN",
+            "Hindi": "hi-IN",
+            "Modern Standard Arabic": "ar-XA",
+            "Bengali": "bn-IN",
+            "Russian": "ru-RU",
+            "Urdu": "ur-IN",
+            "English": "en-US"
         }
-        lang_code = language_code_map.get(target_language, "es-ES")  # Default to Spanish if not mapped
+        lang_code = language_code_map.get(target_language, "en-US")  # Default to English if not mapped
         
         VOICE_MAP = {
             "HOST_A": {"language_code": lang_code, "name": f"{lang_code}-Neural2-A"},  # Female voice
@@ -419,9 +436,9 @@ async def validate_podcast(session_id: str, user_answer: str, correct_answer: st
     profile_str = await get_profile.ainvoke({"session_id": session_id})
     try:
         profile = json.loads(profile_str)
-        target_language = profile.get("target_language", "Spanish")
+        target_language = profile.get("target_language", "English")
     except:
-        target_language = "Spanish"
+        target_language = "English"
     
     user_answer_clean = user_answer.strip()
     correct_answer_clean = correct_answer.strip()
@@ -431,34 +448,34 @@ async def validate_podcast(session_id: str, user_answer: str, correct_answer: st
         return {
             "correct": True,
             "score": 1.0,
-            "feedback": "¡Correcto! Bien hecho."
+            "feedback": "Correct! Well done."
         }
     
     # Use LLM for semantic matching
     llm = get_llm()
-    prompt = f"""Evalúa si la respuesta del estudiante es semánticamente equivalente a la respuesta correcta.
+    prompt = f"""Evaluate if the student's answer is semantically equivalent to the correct answer.
 
-Respuesta correcta: "{correct_answer_clean}"
-Respuesta del estudiante: "{user_answer_clean}"
+Correct answer: "{correct_answer_clean}"
+Student's answer: "{user_answer_clean}"
 
-IMPORTANTE: No busques coincidencias exactas de palabras. Evalúa si ambas respuestas tienen el mismo significado semántico, incluso si usan palabras diferentes o estructuras diferentes.
+IMPORTANT: Do not look for exact word matches. Evaluate if both answers have the same semantic meaning, even if they use different words or structures.
 
-Ejemplos de respuestas semánticamente equivalentes:
-- "Sí, me gusta" y "Me encanta" (ambas expresan gusto positivo)
-- "No lo sé" y "No tengo idea" (ambas expresan falta de conocimiento)
-- "Está bien" y "De acuerdo" (ambas expresan acuerdo)
+Examples of semantically equivalent answers:
+- "Yes, I like it" and "I love it" (both express positive preference)
+- "I don't know" and "I have no idea" (both express lack of knowledge)
+- "That's fine" and "I agree" (both express agreement)
 
-Responde SOLO con JSON en este formato exacto:
+Respond ONLY with JSON in this exact format:
 {{
     "semantically_equivalent": true/false,
     "score": 0.0-1.0,
-    "reason": "breve explicación en español"
+    "reason": "brief explanation in English"
 }}
 
-Si son semánticamente equivalentes, score debe ser >= 0.8. Si no lo son, score debe ser < 0.8."""
+If they are semantically equivalent, score must be >= 0.8. If not, score must be < 0.8."""
 
     messages = [
-        SystemMessage(content=f"Eres un evaluador de respuestas en {target_language}. Evalúa la equivalencia semántica, no coincidencias exactas de palabras."),
+        SystemMessage(content=f"You are an answer evaluator for {target_language}. Evaluate semantic equivalence, not exact word matches."),
         HumanMessage(content=prompt)
     ]
     
@@ -486,13 +503,13 @@ Si son semánticamente equivalentes, score debe ser >= 0.8. Si no lo son, score 
             return {
                 "correct": True,
                 "score": score,
-                "feedback": "¡Correcto! Bien hecho." if score >= 0.95 else f"¡Bien! {reason if reason else 'Respuesta aceptada.'}"
+                "feedback": "Correct! Well done." if score >= 0.95 else f"Good! {reason if reason else 'Answer accepted.'}"
             }
         else:
             return {
                 "correct": False,
                 "score": score,
-                "feedback": f"La respuesta correcta es '{correct_answer}'. {reason if reason else '¡Sigue practicando!'}"
+                "feedback": f"The correct answer is '{correct_answer}'. {reason if reason else 'Keep practicing!'}"
             }
     except Exception as e:
         print(f"[Quiz Val] Error in semantic validation: {e}")
@@ -501,11 +518,11 @@ Si son semánticamente equivalentes, score debe ser >= 0.8. Si no lo son, score 
             return {
                 "correct": False,
                 "score": 0.5,
-                "feedback": f"Cerca, pero no exacto. La respuesta correcta es '{correct_answer}'."
+                "feedback": f"Close, but not exact. The correct answer is '{correct_answer}'."
             }
         return {
             "correct": False,
             "score": 0.0,
-            "feedback": f"La respuesta correcta es '{correct_answer}'. ¡Sigue practicando!"
+            "feedback": f"The correct answer is '{correct_answer}'. Keep practicing!"
         }
 

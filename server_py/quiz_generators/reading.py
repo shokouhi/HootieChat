@@ -16,8 +16,8 @@ async def generate_reading(session_id: str) -> Dict[str, Any]:
     Generate a reading comprehension test from BBC Sport RSS feed.
     Returns: {
         "article_title": "translated title",
-        "article_text": "translated Spanish text",
-        "question": "comprehension question in Spanish",
+        "article_text": "translated text in target language",
+        "question": "comprehension question in target language",
         "difficulty": "A1|A2|B1|B2|C1|C2",
         "original_url": "original article URL"
     }
@@ -191,38 +191,38 @@ async def validate_reading(session_id: str, user_answer: str, article_text: str,
         "explanation": str
     }
     """
-    prompt = f"""Evalúa la respuesta del estudiante a una pregunta de comprensión lectora.
+    prompt = f"""Evaluate the student's answer to a reading comprehension question.
 
-Artículo:
+Article:
 {article_text}
 
-Pregunta:
+Question:
 {question}
 
-Respuesta del estudiante:
+Student's answer:
 {user_answer}
 
-IMPORTANTE: Evalúa la respuesta basándote en el SIGNIFICADO y CONTENIDO SEMÁNTICO, no en coincidencias exactas de palabras. Si la respuesta del estudiante expresa el mismo significado que la respuesta correcta, incluso usando palabras diferentes, debe recibir una puntuación alta.
+IMPORTANT: Evaluate the answer based on MEANING and SEMANTIC CONTENT, not on exact word matches. If the student's answer expresses the same meaning as the correct answer, even using different words, it should receive a high score.
 
-Evalúa la respuesta del estudiante:
-1. ¿La respuesta muestra comprensión del artículo?
-2. ¿La respuesta responde correctamente a la pregunta (semánticamente)?
-3. ¿La respuesta está bien expresada?
+Evaluate the student's answer:
+1. Does the answer show understanding of the article?
+2. Does the answer correctly respond to the question (semantically)?
+3. Is the answer well expressed?
 
-Asigna una puntuación del 1 al 10:
-- 9-10: Respuesta excelente, demuestra comprensión completa y responde perfectamente (semánticamente correcta)
-- 7-8: Respuesta buena, muestra buena comprensión con algunos detalles menores faltantes
-- 5-6: Respuesta aceptable, comprensión básica pero falta información importante
-- 3-4: Respuesta parcial, muestra comprensión limitada
-- 1-2: Respuesta incorrecta o muy incompleta
+Assign a score from 1 to 10:
+- 9-10: Excellent answer, demonstrates complete understanding and responds perfectly (semantically correct)
+- 7-8: Good answer, shows good understanding with some minor missing details
+- 5-6: Acceptable answer, basic understanding but important information is missing
+- 3-4: Partial answer, shows limited understanding
+- 1-2: Incorrect or very incomplete answer
 
-Formato tu respuesta EXACTLY así:
+Format your response EXACTLY like this:
 
-SCORE: [número del 1 al 10]
-FEEDBACK: [comentario breve y alentador, 1-2 frases]
-EXPLANATION: [explicación de por qué esta puntuación, 1-2 frases]
+SCORE: [number from 1 to 10]
+FEEDBACK: [brief and encouraging comment, 1-2 sentences]
+EXPLANATION: [explanation of why this score, 1-2 sentences]
 
-Evalúa ahora:"""
+Evaluate now:"""
 
     # Get target language for feedback
     from tools import get_profile
@@ -230,12 +230,12 @@ Evalúa ahora:"""
     profile_str = await get_profile.ainvoke({"session_id": session_id})
     try:
         profile = json.loads(profile_str)
-        target_language = profile.get("target_language", "Spanish")
+        target_language = profile.get("target_language", "English")
     except:
-        target_language = "Spanish"
+        target_language = "English"
     
     messages = [
-        SystemMessage(content=f"Eres un profesor de {target_language} que evalúa respuestas de comprensión lectora. Evalúa basándote en el significado semántico, no en coincidencias exactas de palabras. Sigue el formato exactamente."),
+        SystemMessage(content=f"You are a {target_language} teacher evaluating reading comprehension answers. Evaluate based on semantic meaning, not exact word matches. Follow the format exactly."),
         HumanMessage(content=prompt)
     ]
     

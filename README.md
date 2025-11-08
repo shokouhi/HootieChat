@@ -25,7 +25,7 @@ An AI-powered Spanish language learning app with interactive quizzes, pronunciat
 - OpenAI GPT-4 or Google Gemini
 - Azure Speech SDK (pronunciation)
 - Google Cloud Text-to-Speech (audio generation)
-- DALL-E 3 (image generation)
+- Vertex AI or DALL-E 3 (image generation)
 
 ## Prerequisites
 
@@ -214,7 +214,6 @@ MIT License - feel free to use this project for learning and teaching!
 
 ## Credits
 
-- Built with ❤️ for language learners
 - Inspired by Duolingo's UI/UX
 - Powered by OpenAI, Google AI, Azure, and open-source tools
 

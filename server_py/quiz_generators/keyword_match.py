@@ -11,9 +11,9 @@ llm = get_llm()
 
 async def generate_keyword_match(session_id: str) -> Dict[str, Any]:
     """
-    Generate a keyword match quiz with 5 Spanish-English word pairs.
+    Generate a keyword match quiz with 5 target language-English word pairs.
     Returns: {
-        "pairs": [{"spanish": "...", "english": "..."}, ...],
+        "pairs": [{"spanish": "...", "english": "..."}, ...],  # Note: "spanish" key contains target language word
         "difficulty": "A1|A2|B1|B2|C1|C2"
     }
     """
@@ -144,8 +144,7 @@ Generate 5 pairs now for {target_level} level:"""
     
     # Ensure we have 5 pairs (fallback with generic words - this is a last resort)
     if len(pairs) < 5:
-        print(f"[Keyword Match] Warning: Only found {len(pairs)} pairs, using fallback")
-        # Note: Fallback pairs are Spanish-specific, but this should rarely be needed
+        print(f"[Keyword Match] Warning: Only found {len(pairs)} pairs for {target_language}, may need fallback")
         # The LLM should generate proper pairs in the requested format
     
     return {
@@ -157,12 +156,12 @@ Generate 5 pairs now for {target_level} level:"""
 async def validate_keyword_match(session_id: str, matches: list) -> Dict[str, Any]:
     """
     Validate keyword matches.
-    matches: [{"spanish": "...", "english": "..."}, ...] - user's attempted matches
+    matches: [{"spanish": "...", "english": "..."}, ...] - user's attempted matches (Note: "spanish" key contains target language word)
     
     Returns: {
         "correct": bool,
         "score": float (0.0 to 1.0),
-        "results": [{"spanish": "...", "english": "...", "is_correct": bool}, ...],
+        "results": [{"spanish": "...", "english": "...", "is_correct": bool}, ...],  # Note: "spanish" key contains target language word
         "total": int,
         "correct_count": int
     }

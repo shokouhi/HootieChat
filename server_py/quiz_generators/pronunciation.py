@@ -17,7 +17,7 @@ async def generate_pronunciation(session_id: str) -> Dict[str, Any]:
     """
     Generate a pronunciation test sentence.
     Returns: {
-        "sentence": "Spanish sentence to pronounce",
+        "sentence": "sentence in target language to pronounce",
         "difficulty": "A1|A2|B1|B2|C1|C2"
     }
     """
