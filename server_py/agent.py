@@ -513,7 +513,8 @@ Now reply briefly and naturally in {target_language if target_language else 'Eng
             messages.append(ToolMessage(content=error_msg, tool_call_id=str(tool_call_id), name="upsert_profile"))
         
         # Force a direct response with clear instructions
-        messages.append(SystemMessage(content=f"CRITICAL: The user requested an unsupported language. You MUST respond with a brief, friendly apology. Tell them the language is not currently supported. List these supported languages: {supported_langs_str}. Ask them to choose one. Be concise - no chit-chat. Do NOT make any tool calls."))
+        # Use HumanMessage instead of SystemMessage (Gemini doesn't allow SystemMessage in middle of conversation)
+        messages.append(HumanMessage(content=f"CRITICAL INSTRUCTION: The user requested an unsupported language. You MUST respond with a brief, friendly apology. Tell them the language is not currently supported. List these supported languages: {supported_langs_str}. Ask them to choose one. Be concise - no chit-chat. Do NOT make any tool calls."))
         
         # Get new response that acknowledges the error
         response = await llm_with_tools.ainvoke(messages)
@@ -630,9 +631,9 @@ Now reply briefly and naturally in {target_language if target_language else 'Eng
         # But if unsupported language was detected, force a final response without more tool calls
         if unsupported_language_detected:
             print(f"[Agent] ⚠️ Unsupported language detected, forcing final response without more tool calls")
-            # Add a system message to force direct response (SystemMessage is already imported at top of file)
+            # Add a human message to force direct response (Gemini doesn't allow SystemMessage in middle of conversation)
             supported_langs_str = ", ".join(SUPPORTED_LANGUAGES_LIST)
-            messages.append(SystemMessage(content=f"CRITICAL: An unsupported language was detected. You MUST respond directly to the user with a friendly apology. Tell them that the language they requested is not currently supported. List all supported languages: {supported_langs_str}. Ask them to choose one of these supported languages. Do NOT make any more tool calls. Just respond to the user now."))
+            messages.append(HumanMessage(content=f"CRITICAL INSTRUCTION: An unsupported language was detected. You MUST respond directly to the user with a friendly apology. Tell them that the language they requested is not currently supported. List all supported languages: {supported_langs_str}. Ask them to choose one of these supported languages. Do NOT make any more tool calls. Just respond to the user now."))
             llm_with_tools = get_llm_with_tools()
             response = await llm_with_tools.ainvoke(messages)
             # Ensure we have a response
