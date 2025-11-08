@@ -402,9 +402,47 @@ async def generate_audio_from_conversation(conversation: str, target_language: s
                     pitch=0.0,
                 )
                 
-                audio = client.synthesize_speech(
-                    input=synthesis_input, voice=voice, audio_config=audio_cfg
-                )
+                try:
+                    audio = client.synthesize_speech(
+                        input=synthesis_input, voice=voice, audio_config=audio_cfg
+                    )
+                except Exception as voice_error:
+                    # If Neural2 voice fails, try falling back to Standard or Wavenet
+                    error_str = str(voice_error).lower()
+                    if "does not exist" in error_str or "invalid" in error_str or "not found" in error_str:
+                        print(f"[Podcast Gen] Voice {voice_cfg['name']} failed, trying fallback voices...")
+                        # Try Standard voice as fallback
+                        fallback_voice_name = voice_cfg['name'].replace("-Neural2-", "-Standard-")
+                        try:
+                            fallback_voice = texttospeech.VoiceSelectionParams(
+                                language_code=lang_code,
+                                name=fallback_voice_name,
+                            )
+                            audio = client.synthesize_speech(
+                                input=synthesis_input,
+                                voice=fallback_voice,
+                                audio_config=audio_cfg
+                            )
+                            print(f"[Podcast Gen] ✅ Fallback to {fallback_voice_name} succeeded")
+                        except Exception as fallback_error:
+                            # Try Wavenet as last resort
+                            wavenet_voice_name = voice_cfg['name'].replace("-Neural2-", "-Wavenet-").replace("-Standard-", "-Wavenet-")
+                            try:
+                                wavenet_voice = texttospeech.VoiceSelectionParams(
+                                    language_code=lang_code,
+                                    name=wavenet_voice_name,
+                                )
+                                audio = client.synthesize_speech(
+                                    input=synthesis_input,
+                                    voice=wavenet_voice,
+                                    audio_config=audio_cfg
+                                )
+                                print(f"[Podcast Gen] ✅ Fallback to {wavenet_voice_name} succeeded")
+                            except Exception as final_error:
+                                print(f"[Podcast Gen] ❌ All voice attempts failed for {lang_code}: {final_error}")
+                                raise voice_error  # Re-raise original error
+                    else:
+                        raise  # Re-raise if it's not a voice name error
                 
                 # Write temp file
                 tmpfile = os.path.join(tmpdir, f"turn_{i}.mp3")
