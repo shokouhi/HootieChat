@@ -322,6 +322,17 @@ async def validate_keyword_match_answer(request: KeywordMatchValidateRequest):
         # Get difficulty from session
         session = get_session(request.sessionId)
         quiz_data = session.get("active_keyword_quiz", {})
+        original_pairs = quiz_data.get("pairs", [])
+        
+        # Extract target language words from original pairs for tracking
+        target_lang_words = []
+        for pair in original_pairs:
+            # Get the target language word (could be "spanish", "french", etc. depending on language)
+            # Try common keys
+            for key in pair.keys():
+                if key != "english" and key != "ENGLISH" and isinstance(pair[key], str):
+                    target_lang_words.append(pair[key].strip().lower())
+                    break
         
         # Save quiz result with context for LLM scoring
         result = await save_quiz_result.ainvoke({
@@ -332,7 +343,8 @@ async def validate_keyword_match_answer(request: KeywordMatchValidateRequest):
             "context": {
                 "expected_answer": f"{validation['correct_count']}/{validation['total']} correct matches",
                 "difficulty_level": quiz_data.get("difficulty", "A1"),
-                "raw_metrics": f"Correct: {validation['correct_count']}/{validation['total']}, All correct: {all_correct}"
+                "raw_metrics": f"Correct: {validation['correct_count']}/{validation['total']}, All correct: {all_correct}",
+                "words": target_lang_words  # Store words for diversification tracking
             }
         })
         
