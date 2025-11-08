@@ -464,7 +464,14 @@ Now reply briefly and naturally in {target_language if target_language else 'Eng
     response = await llm_with_tools.ainvoke(messages)
     
     # Handle tool calls if any (e.g., upsert_profile to save user info)
-    if hasattr(response, 'tool_calls') and response.tool_calls:
+    # Add max iterations limit to prevent infinite loops
+    max_tool_iterations = 5
+    tool_iteration = 0
+    
+    while hasattr(response, 'tool_calls') and response.tool_calls and tool_iteration < max_tool_iterations:
+        tool_iteration += 1
+        print(f"[Agent] 🔧 Tool execution iteration {tool_iteration}/{max_tool_iterations}")
+        
         from langchain_core.messages import ToolMessage
         import uuid
         
@@ -556,9 +563,12 @@ Now reply briefly and naturally in {target_language if target_language else 'Eng
                 messages.append(ToolMessage(content="Error: Unknown tool", tool_call_id=tool_call_id_str, name=tool_name or "unknown"))
         
         # If tools were called, invoke LLM again to get final response
-        if response.tool_calls:
+        if tool_iteration < max_tool_iterations:
             llm_with_tools = get_llm_with_tools()
             response = await llm_with_tools.ainvoke(messages)
+        else:
+            print(f"[Agent] ⚠️ Max tool iterations ({max_tool_iterations}) reached, stopping tool execution")
+            break
     
     return response.content
 
@@ -613,27 +623,56 @@ def build_agent():
                     # Select first quiz type
                     selected_test_type = TEST_TYPES[0]
                     
-                    # Generate quiz intro message (LLM should have already acknowledged the info in 'reply')
-                    quiz_reply = await tutor_reply({
-                        "session_id": session_id,
-                        "last_user": "",
-                        "test_type": selected_test_type,
-                        "last_quiz_result": None,
-                        "quiz_based_assessment": None,
-                        "missing_info": [],
-                        "is_language_question": False,
-                        "correction_json": "{}",
-                        "assessment_json": "{}",
-                        "plan_json": "{}"
-                    })
+                    # Use template-based quiz intro instead of calling tutor_reply (to avoid conversational messages)
+                    target_lang = profile_after.get("target_language", "English")
                     
-                    # Combine acknowledgment (if any) with quiz intro
-                    if reply and not reply.strip().startswith("Hello") and not "tell me" in reply.lower():
+                    # Template-based quiz intros (same as used in subsequent quizzes)
+                    quiz_intros = {
+                        "Spanish": {
+                            "image_detection": "Aquí tienes un ejercicio de imágenes.",
+                            "unit_completion": "Vamos a completar oraciones.",
+                            "keyword_match": "Vamos a practicar vocabulario.",
+                            "pronunciation": "Vamos a practicar pronunciación.",
+                            "podcast": "Escucha este podcast.",
+                            "reading": "Lee este artículo."
+                        },
+                        "French": {
+                            "image_detection": "Voici un exercice d'images.",
+                            "unit_completion": "Complétons des phrases.",
+                            "keyword_match": "Pratiquons le vocabulaire.",
+                            "pronunciation": "Pratiquons la prononciation.",
+                            "podcast": "Écoute ce podcast.",
+                            "reading": "Lis cet article."
+                        },
+                        "English": {
+                            "image_detection": "Here's an image exercise.",
+                            "unit_completion": "Let's complete some sentences.",
+                            "keyword_match": "Let's practice vocabulary.",
+                            "pronunciation": "Let's practice pronunciation.",
+                            "podcast": "Listen to this podcast.",
+                            "reading": "Read this article."
+                        },
+                        "default": {
+                            "image_detection": "Here's an image exercise.",
+                            "unit_completion": "Let's complete some sentences.",
+                            "keyword_match": "Let's practice vocabulary.",
+                            "pronunciation": "Let's practice pronunciation.",
+                            "podcast": "Listen to this podcast.",
+                            "reading": "Read this article."
+                        }
+                    }
+                    
+                    # Get intro template (fallback to default if language not found)
+                    lang_intros = quiz_intros.get(target_lang, quiz_intros["default"])
+                    quiz_intro = lang_intros.get(selected_test_type, quiz_intros["default"][selected_test_type])
+                    
+                    # Combine brief acknowledgment (if any) with quiz intro
+                    if reply and len(reply) < 100 and not reply.strip().startswith("Hello") and "tell me" not in reply.lower():
                         # LLM gave a brief acknowledgment, combine with quiz
-                        combined_reply = f"{reply}\n\n{quiz_reply}"
+                        combined_reply = f"{reply}\n\n{quiz_intro}"
                     else:
-                        # LLM gave welcome message, just use quiz reply (which should acknowledge)
-                        combined_reply = quiz_reply
+                        # LLM gave welcome message or long response - just use quiz intro
+                        combined_reply = quiz_intro
                     
                     session["history"].append({"role": "assistant", "content": combined_reply})
                     
