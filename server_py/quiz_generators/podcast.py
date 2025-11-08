@@ -255,10 +255,18 @@ async def generate_audio_from_conversation(conversation: str, target_language: s
         return {"audio_url": None, "audio_base64": None}
     
     try:
-        # Check for Google credentials
-        if not os.getenv("GOOGLE_APPLICATION_CREDENTIALS"):
-            print("[Podcast Gen] GOOGLE_APPLICATION_CREDENTIALS not set, skipping audio generation")
-            return {"audio_url": None, "audio_base64": None}
+        # In Cloud Run, Application Default Credentials (ADC) are automatically available
+        # We don't need GOOGLE_APPLICATION_CREDENTIALS file path - ADC will work
+        # Try to initialize the client - it will use ADC if available
+        try:
+            # Test if we can create a client (will use ADC in Cloud Run)
+            test_client = texttospeech.TextToSpeechClient()
+            del test_client  # Clean up test client
+        except Exception as e:
+            # If ADC fails, check for explicit credentials file (for local dev)
+            if not os.getenv("GOOGLE_APPLICATION_CREDENTIALS"):
+                print(f"[Podcast Gen] No Google credentials available (ADC or file): {e}")
+                return {"audio_url": None, "audio_base64": None}
         
         # Convert conversation format: Extract speaker names and map to HOST_A/HOST_B
         # Pattern: "SpeakerName: text" -> "HOST_A: text" or "HOST_B: text"
