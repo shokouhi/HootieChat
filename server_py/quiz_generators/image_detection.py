@@ -88,13 +88,35 @@ Return the word now:"""
     # For now, keep it flexible to handle most languages
     object_word = re.sub(r'[^\w\s]', '', object_word).strip()
     
-    # Step 2: Generate image using Google Imagen (via Gemini)
+    # Step 2: Translate the word to English for the image generation prompt
+    # The Imagen API works best with English prompts, so we need to translate
+    translation_prompt = f"""Translate this {target_language} word to English. Return ONLY the English translation, nothing else.
+
+{target_language} word: {object_word}
+
+English translation:"""
+
+    messages_translate = [
+        SystemMessage(content=f"You are a translator. Respond with ONLY the English word."),
+        HumanMessage(content=translation_prompt)
+    ]
+    
+    response_translate = await llm.ainvoke(messages_translate)
+    english_word = response_translate.content.strip().lower()
+    
+    # Clean up the English translation
+    english_word = re.sub(r'[^\w\s]', '', english_word).strip()
+    
+    print(f"[Image Gen] Translating '{object_word}' ({target_language}) to '{english_word}' (English) for image generation")
+    
+    # Step 3: Generate image using Google Imagen (via Gemini)
+    # Use the ENGLISH word so the API generates the correct image
     # Create a realistic cartoon that closely resembles the actual object
-    image_prompt = f"""A realistic cartoon illustration of a {object_word}, inspired by Duolingo's art style but maintaining accurate representation and close resemblance to the real object.
+    image_prompt = f"""A realistic cartoon illustration of a {english_word}, inspired by Duolingo's art style but maintaining accurate representation and close resemblance to the real object.
 
 CRITICAL REQUIREMENTS:
-- The {object_word} MUST be immediately recognizable and accurately represent the real object
-- Maintain realistic proportions, key features, and defining characteristics of the {object_word}
+- The {english_word} MUST be immediately recognizable and accurately represent the real object
+- Maintain realistic proportions, key features, and defining characteristics of the {english_word}
 - The object should closely resemble its real-world appearance (colors, shape, structure)
 - Prioritize accuracy and recognizability over stylization
 
@@ -104,7 +126,7 @@ Style requirements (without compromising realism):
 - Soft, rounded edges while maintaining the object's actual shape
 - Clean, simple design but with all essential features visible
 - White or light neutral background
-- The {object_word} as the single, centered focus
+- The {english_word} as the single, centered focus
 - No text, labels, speech bubbles, or additional objects
 - Educational quality - suitable for language learning
 - Detailed enough to be instantly identifiable
