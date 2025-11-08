@@ -467,6 +467,7 @@ Now reply briefly and naturally in {target_language if target_language else 'Eng
     # Add max iterations limit to prevent infinite loops
     max_tool_iterations = 5
     tool_iteration = 0
+    unsupported_language_detected = False
     
     while hasattr(response, 'tool_calls') and response.tool_calls and tool_iteration < max_tool_iterations:
         tool_iteration += 1
@@ -537,10 +538,12 @@ Now reply briefly and naturally in {target_language if target_language else 'Eng
                             else:
                                 # Language is NOT supported - reject and inform LLM
                                 supported_langs_str = ", ".join(SUPPORTED_LANGUAGES_LIST)
-                                error_msg = f"ERROR: The language '{target_lang}' is not supported. Supported languages are: {supported_langs_str}. Please apologize to the user and ask them to choose one of the supported languages. Do NOT save this language to the profile."
+                                error_msg = f"ERROR: The language '{target_lang}' is not supported. Supported languages are: {supported_langs_str}. IMPORTANT: Do NOT call upsert_profile again. Do NOT try to save this language. Simply apologize to the user politely, list the supported languages, and ask them to choose one. Respond directly to the user - do not make any more tool calls."
                                 print(f"[Agent] ⚠️ Unsupported language detected: {target_lang}")
                                 tool_call_id_str = str(tool_call_id) if tool_call_id else f"call_{uuid.uuid4().hex[:8]}"
                                 messages.append(ToolMessage(content=error_msg, tool_call_id=tool_call_id_str, name=tool_name))
+                                # Mark that we encountered an unsupported language to prevent further tool calls
+                                unsupported_language_detected = True
                                 continue  # Skip executing the tool
                         else:
                             print(f"[Agent] 🔧 LLM called upsert_profile tool with: {tool_args}")
@@ -563,7 +566,17 @@ Now reply briefly and naturally in {target_language if target_language else 'Eng
                 messages.append(ToolMessage(content="Error: Unknown tool", tool_call_id=tool_call_id_str, name=tool_name or "unknown"))
         
         # If tools were called, invoke LLM again to get final response
-        if tool_iteration < max_tool_iterations:
+        # But if unsupported language was detected, force a final response without more tool calls
+        if unsupported_language_detected:
+            print(f"[Agent] ⚠️ Unsupported language detected, forcing final response without more tool calls")
+            # Add a system message to force direct response
+            from langchain_core.messages import SystemMessage
+            messages.append(SystemMessage(content="STOP: An unsupported language was detected. Do NOT make any more tool calls. Respond directly to the user with an apology and list of supported languages."))
+            llm_with_tools = get_llm_with_tools()
+            response = await llm_with_tools.ainvoke(messages)
+            # Break after this response to prevent further tool calls
+            break
+        elif tool_iteration < max_tool_iterations:
             llm_with_tools = get_llm_with_tools()
             response = await llm_with_tools.ainvoke(messages)
         else:
