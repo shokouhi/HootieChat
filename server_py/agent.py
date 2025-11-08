@@ -569,8 +569,7 @@ Now reply briefly and naturally in {target_language if target_language else 'Eng
         # But if unsupported language was detected, force a final response without more tool calls
         if unsupported_language_detected:
             print(f"[Agent] ⚠️ Unsupported language detected, forcing final response without more tool calls")
-            # Add a system message to force direct response
-            from langchain_core.messages import SystemMessage
+            # Add a system message to force direct response (SystemMessage is already imported at top of file)
             messages.append(SystemMessage(content="STOP: An unsupported language was detected. Do NOT make any more tool calls. Respond directly to the user with an apology and list of supported languages."))
             llm_with_tools = get_llm_with_tools()
             response = await llm_with_tools.ainvoke(messages)
