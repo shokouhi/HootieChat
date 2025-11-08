@@ -84,6 +84,12 @@ yarn-debug.log*
 server_py/output_*.mp3
 server_py/temp_*.mp3
 
+# Test and development files
+server_py/accent.py
+server_py/convert_audio.py
+server_py/podcast.py
+server_py/quiz_generator.py
+
 # Testing
 .pytest_cache/
 .coverage
