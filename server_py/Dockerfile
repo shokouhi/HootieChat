@@ -24,6 +24,6 @@ EXPOSE 8080
 # Use environment variable for port, default to 8080 for Cloud Run
 ENV PORT=8080
 
-# Run the server
-CMD exec uvicorn server:app --host 0.0.0.0 --port ${PORT:-8080}
+# Run the server - use Python to read PORT env var
+CMD python -c "import os; import uvicorn; port = int(os.environ.get('PORT', 8080)); uvicorn.run('server:app', host='0.0.0.0', port=port)"
 
