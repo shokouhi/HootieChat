@@ -89,21 +89,27 @@ Return the word now:"""
     object_word = re.sub(r'[^\w\s]', '', object_word).strip()
     
     # Step 2: Generate image using Google Imagen (via Gemini)
-    # Make the prompt very specific to match Duolingo's cartoony character style
-    image_prompt = f"""A cute, friendly cartoon illustration of a {object_word} in the style of Duolingo characters. 
-    
-Style requirements:
-- Duolingo's signature cartoony character art style
-- Bright, cheerful colors (similar to Duolingo's green, blue, yellow palette)
-- Rounded, friendly shapes with soft edges
-- Simple, clean design with expressive features
-- White or light background
-- The {object_word} should be the single, main focus of the image
-- Playful and approachable, like Duolingo's mascot characters
-- No text, labels, or additional objects
-- Centered composition
+    # Create a realistic cartoon that closely resembles the actual object
+    image_prompt = f"""A realistic cartoon illustration of a {object_word}, inspired by Duolingo's art style but maintaining accurate representation and close resemblance to the real object.
 
-The image should look like it belongs in the Duolingo app - fun, educational, and visually appealing for language learners."""
+CRITICAL REQUIREMENTS:
+- The {object_word} MUST be immediately recognizable and accurately represent the real object
+- Maintain realistic proportions, key features, and defining characteristics of the {object_word}
+- The object should closely resemble its real-world appearance (colors, shape, structure)
+- Prioritize accuracy and recognizability over stylization
+
+Style requirements (without compromising realism):
+- Cartoon style inspired by Duolingo characters - friendly and approachable
+- Bright, cheerful colors that match the object's natural/typical colors
+- Soft, rounded edges while maintaining the object's actual shape
+- Clean, simple design but with all essential features visible
+- White or light neutral background
+- The {object_word} as the single, centered focus
+- No text, labels, speech bubbles, or additional objects
+- Educational quality - suitable for language learning
+- Detailed enough to be instantly identifiable
+
+Balance: Make it look friendly and cartoon-like (Duolingo style) while ensuring it's a realistic, accurate representation that students can easily identify and learn from."""
     
     image_url = None
     image_base64 = None
