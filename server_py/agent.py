@@ -52,22 +52,36 @@ def is_language_supported(language: str) -> bool:
     """Check if a language is supported."""
     return normalize_language(language) is not None
 
-def get_llm():
-    """Initialize LLM based on provider configuration."""
-    if CONFIG.PROVIDER == "google":
-        return ChatGoogleGenerativeAI(
-            model=CONFIG.GOOGLE_MODEL,
-            temperature=0.7,
-            google_api_key=CONFIG.GOOGLE_API_KEY
-        )
-    else:
-        return ChatOpenAI(
-            model=CONFIG.OPENAI_MODEL,
-            temperature=0.7,
-            openai_api_key=CONFIG.OPENAI_API_KEY
-        )
+_llm_instance = None
 
-llm = get_llm()
+def get_llm():
+    """Initialize LLM based on provider configuration (lazy initialization)."""
+    global _llm_instance
+    if _llm_instance is None:
+        print(f"[LLM] Initializing LLM with provider: {CONFIG.PROVIDER}")
+        if CONFIG.PROVIDER == "google":
+            if not CONFIG.GOOGLE_API_KEY:
+                raise ValueError("GOOGLE_API_KEY environment variable is required when PROVIDER=google")
+            print(f"[LLM] Using Google Gemini model: {CONFIG.GOOGLE_MODEL}")
+            _llm_instance = ChatGoogleGenerativeAI(
+                model=CONFIG.GOOGLE_MODEL,
+                temperature=0.7,
+                google_api_key=CONFIG.GOOGLE_API_KEY
+            )
+        else:
+            if not CONFIG.OPENAI_API_KEY:
+                raise ValueError("OPENAI_API_KEY environment variable is required when PROVIDER=openai")
+            print(f"[LLM] Using OpenAI model: {CONFIG.OPENAI_MODEL}")
+            _llm_instance = ChatOpenAI(
+                model=CONFIG.OPENAI_MODEL,
+                temperature=0.7,
+                openai_api_key=CONFIG.OPENAI_API_KEY
+            )
+        print(f"[LLM] LLM initialized successfully")
+    return _llm_instance
+
+# Lazy initialization - LLM will be created on first use
+llm = None
 
 # Tool bindings for agent
 from tools import upsert_profile, get_profile, save_assessment, save_quiz_result
@@ -85,8 +99,19 @@ TEST_TYPES = [
     "reading"               # (6) Reading comprehension
 ]
 
-# Bind tools to LLM
-llm_with_tools = llm.bind_tools(tools)
+# Bind tools to LLM (lazy initialization)
+_llm_with_tools = None
+
+def get_llm_with_tools():
+    """Get LLM with tools bound (lazy initialization)."""
+    global _llm_with_tools, llm
+    if _llm_with_tools is None:
+        if llm is None:
+            llm = get_llm()
+        _llm_with_tools = llm.bind_tools(tools)
+    return _llm_with_tools
+
+llm_with_tools = None  # Will be initialized on first use
 
 # 1) CEFR Assessment → JSON
 assess_prompt = ChatPromptTemplate.from_messages([
@@ -160,6 +185,10 @@ Return JSON per spec:
 
 # 4) Final tutor reply with function calling
 async def tutor_reply(input_dict: Dict[str, Any], missing_info: list = None, is_language_question: bool = False) -> str:
+    # Ensure LLM is initialized
+    global llm
+    if llm is None:
+        llm = get_llm()
     """Generate tutor reply using agentic function calling."""
     session = get_session(input_dict["session_id"])
     history = [
@@ -395,7 +424,8 @@ Now reply briefly and naturally in {target_language if target_language else 'Eng
         HumanMessage(content=instruction)
     ]
     
-    # Use agentic LLM with tools
+    # Use agentic LLM with tools (initialize if needed)
+    llm_with_tools = get_llm_with_tools()
     response = await llm_with_tools.ainvoke(messages)
     
     # Handle tool calls if any (e.g., upsert_profile to save user info)
@@ -492,6 +522,7 @@ Now reply briefly and naturally in {target_language if target_language else 'Eng
         
         # If tools were called, invoke LLM again to get final response
         if response.tool_calls:
+            llm_with_tools = get_llm_with_tools()
             response = await llm_with_tools.ainvoke(messages)
     
     return response.content
