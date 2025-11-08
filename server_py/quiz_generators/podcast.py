@@ -304,7 +304,7 @@ async def generate_audio_from_conversation(conversation: str, target_language: s
             "Modern Standard Arabic": "ar-XA",
             "Bengali": "bn-IN",
             "Russian": "ru-RU",
-            "Urdu": "ur-PK",  # ur-IN might not exist, use ur-PK (Pakistan)
+            "Urdu": "ur-IN",  # Google TTS uses ur-IN (India) locale for Urdu voices
             "English": "en-US"
         }
         lang_code = language_code_map.get(target_language, "en-US")  # Default to English if not mapped
@@ -340,10 +340,15 @@ async def generate_audio_from_conversation(conversation: str, target_language: s
                 "HOST_A": "bn-IN-Standard-A",
                 "HOST_B": "bn-IN-Standard-B"
             },
-            # Urdu - use ur-PK (Pakistan) as ur-IN doesn't exist
+            # Urdu - Google TTS uses ur-IN-Wavenet voices (not ur-PK)
             "ur-PK": {
-                "HOST_A": "ur-PK-Standard-A",
-                "HOST_B": "ur-PK-Standard-B"
+                "HOST_A": "ur-IN-Wavenet-A",
+                "HOST_B": "ur-IN-Wavenet-B"
+            },
+            # Also support ur-IN directly (same as ur-PK)
+            "ur-IN": {
+                "HOST_A": "ur-IN-Wavenet-A",
+                "HOST_B": "ur-IN-Wavenet-B"
             }
         }
         
@@ -407,26 +412,61 @@ async def generate_audio_from_conversation(conversation: str, target_language: s
                         input=synthesis_input, voice=voice, audio_config=audio_cfg
                     )
                 except Exception as voice_error:
-                    # If Neural2 voice fails, try falling back to Standard or Wavenet
+                    # If voice fails, try falling back to other voice types
                     error_str = str(voice_error).lower()
                     if "does not exist" in error_str or "invalid" in error_str or "not found" in error_str:
                         print(f"[Podcast Gen] Voice {voice_cfg['name']} failed, trying fallback voices...")
-                        # Try Standard voice as fallback
-                        fallback_voice_name = voice_cfg['name'].replace("-Neural2-", "-Standard-")
-                        try:
-                            fallback_voice = texttospeech.VoiceSelectionParams(
-                                language_code=lang_code,
-                                name=fallback_voice_name,
-                            )
-                            audio = client.synthesize_speech(
-                                input=synthesis_input,
-                                voice=fallback_voice,
-                                audio_config=audio_cfg
-                            )
-                            print(f"[Podcast Gen] ✅ Fallback to {fallback_voice_name} succeeded")
-                        except Exception as fallback_error:
-                            # Try Wavenet as last resort
-                            wavenet_voice_name = voice_cfg['name'].replace("-Neural2-", "-Wavenet-").replace("-Standard-", "-Wavenet-")
+                        
+                        # Special handling for Urdu: try ur-IN if ur-PK was used
+                        if lang_code == "ur-PK":
+                            try:
+                                ur_in_voice = texttospeech.VoiceSelectionParams(
+                                    language_code="ur-IN",
+                                    name=voice_cfg['name'].replace("ur-PK", "ur-IN"),
+                                )
+                                audio = client.synthesize_speech(
+                                    input=synthesis_input,
+                                    voice=ur_in_voice,
+                                    audio_config=audio_cfg
+                                )
+                                print(f"[Podcast Gen] ✅ Fallback to ur-IN locale succeeded")
+                            except Exception as ur_in_error:
+                                print(f"[Podcast Gen] ur-IN fallback also failed: {ur_in_error}")
+                        
+                        # Try Standard voice as fallback (if not already Standard)
+                        if "-Standard-" not in voice_cfg['name']:
+                            fallback_voice_name = voice_cfg['name'].replace("-Neural2-", "-Standard-").replace("-Wavenet-", "-Standard-")
+                            try:
+                                fallback_voice = texttospeech.VoiceSelectionParams(
+                                    language_code=lang_code,
+                                    name=fallback_voice_name,
+                                )
+                                audio = client.synthesize_speech(
+                                    input=synthesis_input,
+                                    voice=fallback_voice,
+                                    audio_config=audio_cfg
+                                )
+                                print(f"[Podcast Gen] ✅ Fallback to {fallback_voice_name} succeeded")
+                            except Exception as fallback_error:
+                                # Try Wavenet as last resort
+                                wavenet_voice_name = voice_cfg['name'].replace("-Neural2-", "-Wavenet-").replace("-Standard-", "-Wavenet-")
+                                try:
+                                    wavenet_voice = texttospeech.VoiceSelectionParams(
+                                        language_code=lang_code,
+                                        name=wavenet_voice_name,
+                                    )
+                                    audio = client.synthesize_speech(
+                                        input=synthesis_input,
+                                        voice=wavenet_voice,
+                                        audio_config=audio_cfg
+                                    )
+                                    print(f"[Podcast Gen] ✅ Fallback to {wavenet_voice_name} succeeded")
+                                except Exception as final_error:
+                                    print(f"[Podcast Gen] ❌ All voice attempts failed for {lang_code}: {final_error}")
+                                    raise voice_error  # Re-raise original error
+                        else:
+                            # Already tried Standard, try Wavenet
+                            wavenet_voice_name = voice_cfg['name'].replace("-Standard-", "-Wavenet-")
                             try:
                                 wavenet_voice = texttospeech.VoiceSelectionParams(
                                     language_code=lang_code,

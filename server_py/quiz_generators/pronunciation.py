@@ -152,7 +152,7 @@ async def validate_pronunciation(session_id: str, audio_data: bytes, reference_t
         "Modern Standard Arabic": "ar-SA",
         "Bengali": "bn-IN",
         "Russian": "ru-RU",
-        "Urdu": "ur-PK",
+        "Urdu": "ur-IN",  # Azure Speech SDK uses ur-IN for Urdu pronunciation assessment
         "English": "en-US"
     }
     speech_language = language_code_map.get(target_language, "en-US")
