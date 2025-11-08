@@ -3,7 +3,7 @@ from typing import Dict, Any
 from langchain_core.messages import SystemMessage, HumanMessage
 import json
 import re
-from .utils import get_llm, get_user_level, get_target_language
+from .utils import get_llm, get_user_level, get_target_language, get_recent_quiz_content
 from .cefr_utils import format_cefr_for_prompt, get_difficulty_guidelines
 from tools import get_profile, get_session
 
@@ -32,6 +32,10 @@ async def generate_unit_completion(session_id: str) -> Dict[str, Any]:
     quiz_results = session.get("quiz_results", [])
     current_level = get_user_level(profile, quiz_results)
     
+    # Get recent quiz content to avoid repetition
+    recent_content = get_recent_quiz_content(quiz_results, test_type="unit_completion", last_n=5)
+    recent_answers = recent_content.get("answers", [])
+    
     # Generate level slightly above (10% harder)
     level_map = {
         "A1": "A1-A2",  # Mix A1 with some A2
@@ -57,6 +61,12 @@ async def generate_unit_completion(session_id: str) -> Dict[str, Any]:
     cefr_info = format_cefr_for_prompt(target_level)
     difficulty_guide = get_difficulty_guidelines(target_level)
     
+    # Build exclusion note for recent answers
+    exclusion_note = ""
+    if recent_answers:
+        recent_answers_str = ", ".join(recent_answers[:5])  # Show up to 5 recent answers
+        exclusion_note = f"\n\nCRITICAL: DO NOT use these recently used words as the masked answer: {recent_answers_str}\nYou MUST choose a DIFFERENT word that has NOT been used recently."
+    
     prompt = f"""Generate a {target_language} sentence completion exercise for a student at the following CEFR level:
 
 {cefr_info}
@@ -72,6 +82,7 @@ Requirements:
 - Use generic subjects like "personas", "alguien", "gente", or "un estudiante" (not specific names)
 - Choose ONE key word to mask (noun, verb, adjective, or adverb) - the masked word MUST match the vocabulary level specified above
 - Make the context clear enough that the word can be guessed, but ensure the entire exercise matches the student's level
+{exclusion_note}
 
 Format:
 1. Write the sentences with [MASK] where the word should go

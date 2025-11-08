@@ -5,7 +5,7 @@ import json
 import re
 import base64
 import requests
-from .utils import get_llm, get_user_level, get_target_language
+from .utils import get_llm, get_user_level, get_target_language, get_recent_quiz_content
 from .cefr_utils import format_cefr_for_prompt, get_difficulty_guidelines
 from tools import get_profile, get_session
 from config import CONFIG
@@ -34,6 +34,10 @@ async def generate_image_detection(session_id: str) -> Dict[str, Any]:
     quiz_results = session.get("quiz_results", [])
     current_level = get_user_level(profile, quiz_results)
     
+    # Get recent quiz content to avoid repetition
+    recent_content = get_recent_quiz_content(quiz_results, test_type="image_detection", last_n=5)
+    recent_words = recent_content.get("words", [])
+    
     level_map = {
         "A1": "A1-A2",
         "A2": "A2-B1",
@@ -52,6 +56,12 @@ async def generate_image_detection(session_id: str) -> Dict[str, Any]:
     difficulty_guide = get_difficulty_guidelines(target_level)
     
     # Step 1: LLM picks a word in target language for an object
+    # Build exclusion list for recent words
+    exclusion_note = ""
+    if recent_words:
+        recent_words_str = ", ".join(recent_words[:10])  # Show up to 10 recent words
+        exclusion_note = f"\n\nCRITICAL: DO NOT use these recently used words: {recent_words_str}\nYou MUST choose a DIFFERENT word that has NOT been used recently."
+    
     prompt1 = f"""Select a {target_language} word for a common, recognizable object appropriate for a student at the following CEFR level:
 
 {cefr_info}
@@ -67,6 +77,7 @@ The word MUST:
 - For A1: Use ONLY basic everyday objects (cat, house, book, apple, etc.)
 - For A2-B1: Common objects with slightly more variety
 - For B2+: Can include more abstract or specialized objects
+{exclusion_note}
 
 Return ONLY the {target_language} word, nothing else.
 Example for A1-A2 ({target_language}): gato, mesa, libro, manzana

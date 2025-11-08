@@ -139,11 +139,12 @@ def get_difficulty_guidelines(level: str) -> str:
     
     guidelines = {
         "A1": """
-VOCABULARY: Use only the 300-500 most common words (basic nouns, verbs, adjectives)
-GRAMMAR: Simple present tense, basic past tense. Avoid subjunctive, conditionals, complex tenses
-SENTENCE STRUCTURE: Maximum 8-10 words per sentence. Subject-verb-object only
-COMPLEXITY: Concrete, everyday topics. Direct, simple statements
-EXAMPLES: "I am happy", "The cat is black", "I like pizza"
+VOCABULARY: Use ONLY the 100-300 MOST BASIC words (cat, dog, house, book, apple, water, hello, yes, no, I, you, he, she, good, bad, big, small, red, blue, eat, drink, sleep, go, come, see, like, want, have, be, do). NO abstract words, NO complex nouns, NO advanced vocabulary.
+GRAMMAR: ONLY simple present tense (I am, you are, he is, I like, I have). NO past tense, NO future tense, NO subjunctive, NO conditionals, NO complex tenses, NO modal verbs except "can" and "want".
+SENTENCE STRUCTURE: Maximum 5-7 words per sentence. ONLY subject-verb-object. NO conjunctions except "and". NO complex sentences.
+COMPLEXITY: ONLY concrete, visible, everyday objects and actions. NO abstract concepts, NO opinions, NO explanations. Direct, simple statements only.
+EXAMPLES: "I like pizza", "The cat is black", "I have a book", "You are good", "I can see"
+AVOID: Complex sentences, abstract words, past/future tense, explanations, opinions, descriptions beyond basic adjectives (good, bad, big, small, red, blue)
 """,
         "A2": """
 VOCABULARY: Use common words (500-1000 most frequent). Basic descriptive vocabulary

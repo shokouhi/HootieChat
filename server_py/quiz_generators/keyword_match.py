@@ -3,7 +3,7 @@ from typing import Dict, Any
 from langchain_core.messages import SystemMessage, HumanMessage
 import json
 import re
-from .utils import get_llm, get_user_level, get_target_language
+from .utils import get_llm, get_user_level, get_target_language, get_recent_quiz_content
 from .cefr_utils import format_cefr_for_prompt, get_difficulty_guidelines
 from tools import get_profile, get_session
 
@@ -30,6 +30,10 @@ async def generate_keyword_match(session_id: str) -> Dict[str, Any]:
     quiz_results = session.get("quiz_results", [])
     current_level = get_user_level(profile, quiz_results)
     
+    # Get recent quiz content to avoid repetition
+    recent_content = get_recent_quiz_content(quiz_results, test_type="keyword_match", last_n=5)
+    recent_words = recent_content.get("words", [])
+    
     # Generate level slightly above (10% harder)
     level_map = {
         "A1": "A1-A2",
@@ -55,6 +59,12 @@ async def generate_keyword_match(session_id: str) -> Dict[str, Any]:
     cefr_info = format_cefr_for_prompt(target_level)
     difficulty_guide = get_difficulty_guidelines(target_level)
     
+    # Build exclusion note for recent words
+    exclusion_note = ""
+    if recent_words:
+        recent_words_str = ", ".join(recent_words[:10])  # Show up to 10 recent words
+        exclusion_note = f"\n\nCRITICAL: DO NOT use these recently used {target_language} words: {recent_words_str}\nYou MUST choose DIFFERENT words that have NOT been used recently."
+    
     prompt = f"""Generate 5 {target_language}-English word pairs for a vocabulary matching exercise.
 
 Student's CEFR Level:
@@ -74,6 +84,7 @@ Requirements:
 - For B1+: Can include more advanced vocabulary as specified in guidelines
 - Mix different word types (nouns, verbs, adjectives, etc.)
 - Personalize vocabulary to student interests when possible
+{exclusion_note}
 
 Format your response EXACTLY like this:
 WORD1_{target_language.upper()}: [word in {target_language}]
