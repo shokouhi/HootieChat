@@ -570,9 +570,15 @@ Now reply briefly and naturally in {target_language if target_language else 'Eng
         if unsupported_language_detected:
             print(f"[Agent] ⚠️ Unsupported language detected, forcing final response without more tool calls")
             # Add a system message to force direct response (SystemMessage is already imported at top of file)
-            messages.append(SystemMessage(content="STOP: An unsupported language was detected. Do NOT make any more tool calls. Respond directly to the user with an apology and list of supported languages."))
+            supported_langs_str = ", ".join(SUPPORTED_LANGUAGES_LIST)
+            messages.append(SystemMessage(content=f"CRITICAL: An unsupported language was detected. You MUST respond directly to the user with a friendly apology. Tell them that the language they requested is not currently supported. List all supported languages: {supported_langs_str}. Ask them to choose one of these supported languages. Do NOT make any more tool calls. Just respond to the user now."))
             llm_with_tools = get_llm_with_tools()
             response = await llm_with_tools.ainvoke(messages)
+            # Ensure we have a response
+            if not response or not hasattr(response, 'content') or not response.content:
+                # Fallback response if LLM doesn't respond
+                supported_langs_str = ", ".join(SUPPORTED_LANGUAGES_LIST)
+                return f"I'm sorry, but the language you requested is not currently supported. I can help you learn: {supported_langs_str}. Which one would you like to learn?"
             # Break after this response to prevent further tool calls
             break
         elif tool_iteration < max_tool_iterations:
@@ -580,7 +586,16 @@ Now reply briefly and naturally in {target_language if target_language else 'Eng
             response = await llm_with_tools.ainvoke(messages)
         else:
             print(f"[Agent] ⚠️ Max tool iterations ({max_tool_iterations}) reached, stopping tool execution")
+            # If we hit max iterations and still have tool calls, return an error message
+            if hasattr(response, 'tool_calls') and response.tool_calls:
+                supported_langs_str = ", ".join(SUPPORTED_LANGUAGES_LIST)
+                return f"I'm sorry, but I'm having trouble processing your request. If you mentioned a language, please note that I currently support: {supported_langs_str}. Which language would you like to learn?"
             break
+    
+    # Ensure we have a valid response
+    if not response or not hasattr(response, 'content'):
+        supported_langs_str = ", ".join(SUPPORTED_LANGUAGES_LIST)
+        return f"I'm sorry, but I encountered an error. I currently support these languages: {supported_langs_str}. Which one would you like to learn?"
     
     return response.content
 
