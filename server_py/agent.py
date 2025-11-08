@@ -103,7 +103,7 @@ Return JSON per spec:
     return response.content
 
 # 4) Final tutor reply with function calling
-async def tutor_reply(input_dict: Dict[str, Any]) -> str:
+async def tutor_reply(input_dict: Dict[str, Any], missing_info: list = None, is_language_question: bool = False) -> str:
     """Generate tutor reply using agentic function calling."""
     session = get_session(input_dict["session_id"])
     history = [
@@ -207,7 +207,7 @@ Keep it warm and encouraging!"""
             if profile.get("interests"):
                 profile_parts.append(f"Interests: {profile.get('interests')}")
             # Include target language and level for internal use
-            target_language = profile.get("target_language", "Spanish")  # Default to Spanish for backward compatibility
+            target_language = profile.get("target_language")  # None if not set (defaults to English)
             stated_level = profile.get("language_level") or profile.get("spanish_level")  # Support both for backward compatibility
             if target_language:
                 profile_parts.append(f"Target Language: {target_language}")
@@ -218,12 +218,55 @@ Keep it warm and encouraging!"""
         
         language_note = ""
         if needs_help:
-            target_lang = profile.get("target_language", "Spanish") if profile else "Spanish"
-            language_note = f"\n\nNOTE: User asked for help in English. You may respond briefly in English to clarify, then continue in {target_lang}."
+            target_lang = profile.get("target_language") if profile else None
+            if target_lang:
+                language_note = f"\n\nNOTE: User asked for help in English. You may respond briefly in English to clarify, then continue in {target_lang}."
+            else:
+                language_note = "\n\nNOTE: User asked for help. Respond in English (target language not yet set)."
         
         # Determine instruction based on context
-        # Get target language from profile
-        target_language = profile.get("target_language", "Spanish") if profile else "Spanish"
+        # Get target language from profile - default to English if not set
+        target_language = profile.get("target_language") if profile else None
+        if not target_language:
+            target_language = "English"  # Default to English until user specifies
+        
+        # Add missing info prompt if needed (passed from run_step)
+        missing_info_list = input_dict.get("missing_info", [])
+        is_lang_question = input_dict.get("is_language_question", False)
+        missing_info_prompt = ""
+        if missing_info_list and not is_lang_question:
+            # Get current profile to check target_language
+            profile_str = await get_profile.ainvoke({"session_id": input_dict["session_id"]})
+            try:
+                current_profile = json.loads(profile_str)
+            except:
+                current_profile = {}
+            
+            missing_items = []
+            if "name" in missing_info_list:
+                missing_items.append("their name")
+            if "age" in missing_info_list:
+                missing_items.append("their age")
+            if "interests" in missing_info_list:
+                missing_items.append("their interests/hobbies")
+            if "target_language" in missing_info_list:
+                missing_items.append("what language they want to learn")
+            if "language_level" in missing_info_list and current_profile.get("target_language"):
+                missing_items.append(f"their current level in {current_profile.get('target_language')}")
+            
+            if missing_items:
+                missing_info_prompt = f"\n\nIMPORTANT: The user hasn't provided: {', '.join(missing_items)}. Gently ask about ONE of these missing pieces of information in your response (prioritize target_language if missing, then name, age, interests, level). Keep it casual and brief."
+        
+        # Add language question handling
+        language_question_prompt = ""
+        if is_lang_question:
+            profile_str = await get_profile.ainvoke({"session_id": input_dict["session_id"]})
+            try:
+                profile = json.loads(profile_str)
+            except:
+                profile = {}
+            target_lang = profile.get("target_language", "the target language")
+            language_question_prompt = f"\n\nIMPORTANT: The user is asking a language-related question. Answer their question helpfully and provide related information/translations about {target_lang}. Use this as a teaching opportunity. After answering, you can continue with a quiz if appropriate."
         
         if last_quiz_result:
             # User just completed a quiz - provide brief feedback ONLY (no transition - that happens separately)
@@ -236,6 +279,8 @@ IMPORTANT: This is ONLY the feedback message. Do NOT transition to the next quiz
         elif selected_test_type:
             # New turn starting with a quiz
             instruction = f"""You are Hootie. A new lesson turn is starting. NO GREETINGS - just briefly introduce the quiz naturally in {target_language}:{profile_info}
+{missing_info_prompt}
+{language_question_prompt}
 
 {test_instruction}
 {assessment_section}
@@ -250,8 +295,10 @@ Style:
 - Keep it conversational, not instructional
 {language_note}"""
         else:
-            # Help request or other
+            # Help request, language question, or other
             instruction = f"""You are Hootie. Respond to the user's request:{profile_info}
+{missing_info_prompt}
+{language_question_prompt}
 
 {language_note}
 
@@ -264,7 +311,7 @@ Assessment JSON (use internally to adjust difficulty):
 Plan JSON (use internally to guide content):
 {input_dict.get('plan_json', '{}')}
 
-Now reply briefly and naturally in {target_language} (unless help exception applies)."""
+Now reply briefly and naturally in {target_language if target_language else 'English'} (unless help exception applies)."""
     
     messages = [
         SystemMessage(content=system_prompt),
@@ -337,9 +384,16 @@ def build_agent():
                 "is_first_turn": True
             }, ensure_ascii=False)
         
+        # Get current profile to check what's missing
+        profile_str = await get_profile.ainvoke({"session_id": session_id})
+        try:
+            current_profile = json.loads(profile_str)
+        except:
+            current_profile = {}
+        
         # After first turn: Check if user provided their info and extract/save it
-        # If this is turn 2 (one user message + one assistant message in history), extract profile info
-        if len(session.get("history", [])) == 2:
+        # Extract profile info from ANY turn (not just turn 2) - progressive learning
+        if not is_first_turn and not is_quiz_completion:
             # User just responded with their info - extract and save it
             user_response = user.lower()
             profile_updates = {}
@@ -436,6 +490,23 @@ def build_agent():
                     "session_id": session_id,
                     "patch": profile_updates
                 })
+                # Update current_profile with new info
+                current_profile.update(profile_updates)
+        
+        # Check what profile information is still missing
+        missing_info = []
+        if not current_profile.get("name"):
+            missing_info.append("name")
+        if not current_profile.get("age"):
+            missing_info.append("age")
+        if not current_profile.get("interests"):
+            missing_info.append("interests")
+        if not current_profile.get("target_language"):
+            missing_info.append("target_language")
+        if not current_profile.get("language_level"):
+            missing_info.append("language_level")
+        
+        print(f"[Agent] 📋 Missing profile info: {missing_info}")
         
         # For subsequent turns: normal flow with test selection
         session = get_session(session_id)
@@ -475,14 +546,52 @@ def build_agent():
         if is_quiz_completion and quiz_results:
             last_quiz_result = quiz_results[-1]
         
-        # Quiz order logic: sequential until all types completed once, then random
+        # Check if user explicitly requested a specific test type in this message
+        user_msg_lower = user.lower() if user else ""
+        requested_test_type = None
+        
+        # Check for explicit requests (e.g., "more image tests", "I want pronunciation", "do vocabulary matching")
+        if any(word in user_msg_lower for word in ["image", "picture", "visual", "detection"]):
+            requested_test_type = "image_detection"
+        elif any(word in user_msg_lower for word in ["complete", "fill", "missing", "blank", "sentence completion"]):
+            requested_test_type = "unit_completion"
+        elif any(word in user_msg_lower for word in ["match", "vocabulary", "words", "pair", "matching"]):
+            requested_test_type = "keyword_match"
+        elif any(word in user_msg_lower for word in ["pronounce", "pronunciation", "speak", "speaking"]):
+            requested_test_type = "pronunciation"
+        elif any(word in user_msg_lower for word in ["listen", "podcast", "audio", "hearing", "conversation"]):
+            requested_test_type = "podcast"
+        elif any(word in user_msg_lower for word in ["read", "reading", "article", "text", "story", "comprehension"]):
+            requested_test_type = "reading"
+        
+        # Quiz order logic: sequential until all types completed once, then consider preferences
         completed_types = set(result.get("test_type", "") for result in quiz_results)
         all_completed_once = all(t in completed_types for t in TEST_TYPES)
         
-        if all_completed_once:
-            # All quiz types completed at least once - use random order
-            selected_test_type = random.choice(TEST_TYPES)
-            print(f"[Agent] 🎲 Random test type (all completed once): {selected_test_type}")
+        # Get test preferences from session
+        test_preferences = session.get("test_preferences", {})
+        
+        # If user explicitly requested a test type, use it immediately
+        if requested_test_type and requested_test_type in TEST_TYPES:
+            selected_test_type = requested_test_type
+            print(f"[Agent] 🎯 User explicitly requested test type: {selected_test_type}")
+        elif all_completed_once:
+            # All quiz types completed at least once - use preferences or random
+            if test_preferences:
+                # Weight test types by preferences
+                weighted_types = []
+                for test_type in TEST_TYPES:
+                    weight = test_preferences.get(test_type, 1)
+                    weighted_types.extend([test_type] * int(weight))
+                if weighted_types:
+                    selected_test_type = random.choice(weighted_types)
+                    print(f"[Agent] 🎯 Selected test type based on preferences: {selected_test_type} (preferences: {test_preferences})")
+                else:
+                    selected_test_type = random.choice(TEST_TYPES)
+                    print(f"[Agent] 🎲 Random test type (all completed once): {selected_test_type}")
+            else:
+                selected_test_type = random.choice(TEST_TYPES)
+                print(f"[Agent] 🎲 Random test type (all completed once): {selected_test_type}")
         else:
             # Sequential order - find next uncompleted type
             for test_type in TEST_TYPES:
@@ -565,6 +674,49 @@ def build_agent():
         is_help_request = any(keyword in user_msg_lower for keyword in help_keywords)
         print(f"[Agent] Help request detected: {is_help_request}")
         
+        # Detect language-related questions (user asking about the target language)
+        language_question_keywords = ["what does", "what is", "how do you say", "translate", "meaning", "word for", 
+                                     "how to say", "pronunciation", "grammar", "conjugation", "verb", "noun", 
+                                     "adjective", "tense", "what's the", "explain", "tell me about"]
+        is_language_question = any(keyword in user_msg_lower for keyword in language_question_keywords)
+        print(f"[Agent] Language question detected: {is_language_question}")
+        
+        # Detect test type preferences from user messages
+        test_type_preferences = {}
+        user_msg = user.lower()
+        
+        # Image detection preferences
+        if any(word in user_msg for word in ["image", "picture", "visual", "see", "look", "detection", "identify"]):
+            test_type_preferences["image_detection"] = test_type_preferences.get("image_detection", 0) + 2
+        
+        # Unit completion preferences
+        if any(word in user_msg for word in ["complete", "fill", "missing", "blank", "sentence completion", "word completion"]):
+            test_type_preferences["unit_completion"] = test_type_preferences.get("unit_completion", 0) + 2
+        
+        # Keyword match preferences
+        if any(word in user_msg for word in ["match", "vocabulary", "words", "pair", "matching", "translate words"]):
+            test_type_preferences["keyword_match"] = test_type_preferences.get("keyword_match", 0) + 2
+        
+        # Pronunciation preferences
+        if any(word in user_msg for word in ["pronounce", "speak", "say", "pronunciation", "audio", "voice", "speaking"]):
+            test_type_preferences["pronunciation"] = test_type_preferences.get("pronunciation", 0) + 2
+        
+        # Podcast preferences
+        if any(word in user_msg for word in ["listen", "audio", "podcast", "hearing", "conversation", "dialogue"]):
+            test_type_preferences["podcast"] = test_type_preferences.get("podcast", 0) + 2
+        
+        # Reading preferences
+        if any(word in user_msg for word in ["read", "reading", "article", "text", "story", "comprehension"]):
+            test_type_preferences["reading"] = test_type_preferences.get("reading", 0) + 2
+        
+        # Store preferences in session for future test selection
+        if test_type_preferences:
+            if "test_preferences" not in session:
+                session["test_preferences"] = {}
+            for test_type, weight in test_type_preferences.items():
+                session["test_preferences"][test_type] = session["test_preferences"].get(test_type, 0) + weight
+            print(f"[Agent] 🎯 Test type preferences updated: {session['test_preferences']}")
+        
         # 4. Generate tutor reply with test type, quiz feedback, and overall assessment
         # If this is a quiz completion (last_quiz_result exists), provide feedback
         # Otherwise, this is a new turn starting - generate brief intro with quiz
@@ -580,6 +732,8 @@ def build_agent():
                 "test_type": None,  # No new quiz, just feedback
                 "last_quiz_result": last_quiz_result,
                 "quiz_based_assessment": quiz_based_assessment,
+                "missing_info": missing_info,
+                "is_language_question": is_language_question,
                 "correction_json": correction_json if isinstance(correction_json, str) else json.dumps(correction_json),
                 "assessment_json": assessment_json if isinstance(assessment_json, str) else json.dumps(assessment_json),
                 "plan_json": plan_json if isinstance(plan_json, str) else json.dumps(plan_json)
@@ -622,6 +776,8 @@ def build_agent():
                 "test_type": selected_test_type,
                 "last_quiz_result": None,
                 "quiz_based_assessment": quiz_based_assessment,
+                "missing_info": missing_info,
+                "is_language_question": False,
                 "correction_json": correction_json if isinstance(correction_json, str) else json.dumps(correction_json),
                 "assessment_json": assessment_json if isinstance(assessment_json, str) else json.dumps(assessment_json),
                 "plan_json": plan_json if isinstance(plan_json, str) else json.dumps(plan_json)
@@ -644,13 +800,16 @@ def build_agent():
             print(f"[Agent] Combined reply length: {len(combined_reply)} chars")
             print(f"{'='*60}\n")
             return result
-        elif is_help_request:
-            # Help request - no quiz, just respond
-            print(f"[Agent] 📝 Mode: Help request (no quiz)")
+        elif is_help_request or is_language_question or (missing_info and not current_profile.get("target_language")):
+            # Help request, language question, or missing critical info (target_language) - no quiz, just respond
+            mode = "Help request" if is_help_request else ("Language question" if is_language_question else "Missing info")
+            print(f"[Agent] 📝 Mode: {mode} (no quiz)")
             reply = await tutor_reply({
                 "session_id": session_id,
                 "last_user": user,
                 "test_type": None,
+                "missing_info": missing_info,
+                "is_language_question": is_language_question,
                 "last_quiz_result": None,
                 "quiz_based_assessment": quiz_based_assessment,
                 "correction_json": correction_json if isinstance(correction_json, str) else json.dumps(correction_json),
@@ -678,6 +837,8 @@ def build_agent():
                 "test_type": selected_test_type if not is_help_request else None,
                 "last_quiz_result": None,
                 "quiz_based_assessment": quiz_based_assessment,
+                "missing_info": missing_info,
+                "is_language_question": is_language_question,
                 "correction_json": correction_json if isinstance(correction_json, str) else json.dumps(correction_json),
                 "assessment_json": assessment_json if isinstance(assessment_json, str) else json.dumps(assessment_json),
                 "plan_json": plan_json if isinstance(plan_json, str) else json.dumps(plan_json)
