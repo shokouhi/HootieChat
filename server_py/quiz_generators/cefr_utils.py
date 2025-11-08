@@ -139,12 +139,12 @@ def get_difficulty_guidelines(level: str) -> str:
     
     guidelines = {
         "A1": """
-VOCABULARY: Use ONLY the 100-300 MOST BASIC words (cat, dog, house, book, apple, water, hello, yes, no, I, you, he, she, good, bad, big, small, red, blue, eat, drink, sleep, go, come, see, like, want, have, be, do). NO abstract words, NO complex nouns, NO advanced vocabulary.
-GRAMMAR: ONLY simple present tense (I am, you are, he is, I like, I have). NO past tense, NO future tense, NO subjunctive, NO conditionals, NO complex tenses, NO modal verbs except "can" and "want".
-SENTENCE STRUCTURE: Maximum 5-7 words per sentence. ONLY subject-verb-object. NO conjunctions except "and". NO complex sentences.
-COMPLEXITY: ONLY concrete, visible, everyday objects and actions. NO abstract concepts, NO opinions, NO explanations. Direct, simple statements only.
-EXAMPLES: "I like pizza", "The cat is black", "I have a book", "You are good", "I can see"
-AVOID: Complex sentences, abstract words, past/future tense, explanations, opinions, descriptions beyond basic adjectives (good, bad, big, small, red, blue)
+VOCABULARY: Use ONLY the 50-100 MOST BASIC words - like a 4-year-old child's vocabulary. Examples: cat, dog, mom, dad, house, car, book, ball, apple, water, milk, bread, hello, bye, yes, no, I, you, he, she, good, bad, big, small, red, blue, green, yellow, one, two, three, eat, drink, sleep, go, come, see, like, want, have, be, do, play, run, jump, sit, stand, up, down, in, out, on, off. NO abstract words, NO complex nouns, NO advanced vocabulary, NO numbers above 10, NO colors beyond basic (red, blue, green, yellow, black, white).
+GRAMMAR: ONLY simple present tense with basic verbs (I am, you are, he is, I like, I have, I want, I see, I go). NO past tense, NO future tense, NO subjunctive, NO conditionals, NO complex tenses, NO modal verbs except "can" and "want". NO plurals except very common ones (cats, dogs). NO possessives except "my", "your".
+SENTENCE STRUCTURE: Maximum 3-5 words per sentence. ONLY subject-verb-object or subject-verb. NO conjunctions except "and" for simple lists. NO complex sentences. NO questions except "What is this?" or "Where is X?".
+COMPLEXITY: ONLY concrete, visible, everyday objects and actions that a 4-year-old would know. NO abstract concepts, NO opinions, NO explanations, NO descriptions beyond basic adjectives (good, bad, big, small, red, blue, green, yellow). ONLY things you can point to or see.
+EXAMPLES: "I like cat", "Dog is big", "I have book", "You are good", "I can see", "Mom is here", "I want apple", "Car is red"
+AVOID: Complex sentences, abstract words, past/future tense, explanations, opinions, descriptions beyond basic adjectives, numbers above 10, complex grammar, plurals, possessives beyond "my/your"
 """,
         "A2": """
 VOCABULARY: Use common words (500-1000 most frequent). Basic descriptive vocabulary

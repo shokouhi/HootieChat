@@ -116,6 +116,33 @@ async def validate_pronunciation(session_id: str, audio_data: bytes, reference_t
         "json_result": dict (detailed breakdown)
     }
     """
+    # Get target language for pronunciation assessment
+    from tools import get_profile
+    import json
+    profile_str = await get_profile.ainvoke({"session_id": session_id})
+    try:
+        profile = json.loads(profile_str)
+        target_language = profile.get("target_language", "English")
+    except:
+        target_language = "English"
+    
+    # Map target language to Azure Speech language code
+    language_code_map = {
+        "Spanish": "es-ES",
+        "French": "fr-FR",
+        "German": "de-DE",
+        "Italian": "it-IT",
+        "Portuguese": "pt-PT",
+        "Mandarin Chinese": "zh-CN",
+        "Hindi": "hi-IN",
+        "Modern Standard Arabic": "ar-SA",
+        "Bengali": "bn-IN",
+        "Russian": "ru-RU",
+        "Urdu": "ur-PK",
+        "English": "en-US"
+    }
+    speech_language = language_code_map.get(target_language, "en-US")
+    
     # Azure Speech SDK configuration
     azure_key = os.getenv("AZURE_SPEECH_KEY")
     azure_region = os.getenv("AZURE_SPEECH_REGION", "eastus")
@@ -188,7 +215,7 @@ async def validate_pronunciation(session_id: str, audio_data: bytes, reference_t
             enable_miscue=True
         )
         
-        rec = speechsdk.SpeechRecognizer(speech_config=speech_config, audio_config=audio_config, language="es-ES")
+        rec = speechsdk.SpeechRecognizer(speech_config=speech_config, audio_config=audio_config, language=speech_language)
         pron_cfg.apply_to(rec)
         result = rec.recognize_once()
         
