@@ -340,9 +340,9 @@ async def generate_audio_from_conversation(conversation: str, target_language: s
                 "HOST_A": "bn-IN-Standard-A",
                 "HOST_B": "bn-IN-Standard-B"
             },
-            # Urdu - may need Standard or Wavenet
-            "ur-IN": {
-                "HOST_A": "ur-PK-Standard-A",  # Note: ur-IN might not exist, use ur-PK
+            # Urdu - use ur-PK (Pakistan) as ur-IN doesn't exist
+            "ur-PK": {
+                "HOST_A": "ur-PK-Standard-A",
                 "HOST_B": "ur-PK-Standard-B"
             }
         }
